@@ -2,9 +2,11 @@
 // The inbox. The server stores proposals and owners' witnesses, checks every signature
 // against the exact body, and broadcasts once all required signers have signed. It
 // never decides what a tx does: each owner's browser recomputes that from the chain.
+import { appFor } from "../../sdk/src/core/apps/catalogue.js";
+import { minswapAdapter } from "../../sdk/src/core/apps/minswap/adapter.js";
 import { randomBytes } from "node:crypto";
 import type { Context, Hono } from "hono";
-import { CML, creationOf, formatVaultId, makeVault, parseVaultId } from "../../sdk/src/core/index.js";
+import { CML, creationOf, formatVaultId, makeVault, parseVaultId, type Network } from "../../sdk/src/core/index.js";
 import { describeTx } from "../../sdk/src/core/cosign.js";
 import { bodyHash, requiredSignersOf, verifiedSigners, withWitnesses } from "../../sdk/src/core/witnesses.js";
 import { sha256, type mountAuth } from "./auth.js";
@@ -60,16 +62,28 @@ function escalationProblem(txCbor: string, policy: string, allowanceRef: string)
   return kind === "CoSignedSpend" ? undefined : "an escalation must use the CoSignedSpend redeemer";
 }
 
-/** An agent's own spend, the only tx the submit relay sends: its allowance's current UTxO, alone, with AgentSpend, signed by its key. */
-export function agentSpendProblem(txCbor: string, policy: string, allowanceRef: string, agent: string): string | undefined {
+/**
+ * An agent's own tx, the only kind the submit relay sends: its allowance's current UTxO, alone, signed by its key,
+ * either a payment (AgentSpend, no withdrawal) or a trade (AgentTrade, exactly one zero withdrawal from this
+ * network's app adapter). The chain checks everything else.
+ */
+export function agentTxProblem(txCbor: string, policy: string, allowanceRef: string, agent: string, network: Network): string | undefined {
   try {
     const body = CML.Transaction.from_cbor_hex(txCbor).body();
     if (body.inputs().len() !== 1) return "an agent spend has exactly one input, its allowance";
     const i = body.inputs().get(0);
     if (`${i.transaction_id().to_hex()}#${i.index()}` !== allowanceRef) return "this tx doesn't spend your allowance's current UTxO";
     const scriptAddr = CML.EnterpriseAddress.new(0, CML.Credential.new_script(CML.ScriptHash.from_hex(policy))).to_address().to_bech32();
-    if (describeTx(txCbor, { vault: { hash: policy }, inputAddresses: { [allowanceRef]: scriptAddr } }).vaultSpends[allowanceRef] !== "AgentSpend")
-      return "only an ordinary agent spend goes through here; escalations go to the owners' inbox";
+    const kind = describeTx(txCbor, { vault: { hash: policy }, inputAddresses: { [allowanceRef]: scriptAddr } }).vaultSpends[allowanceRef];
+    const wd = body.withdrawals();
+    if (kind === "AgentSpend") {
+      if (wd) return "a payment doesn't withdraw";
+    } else if (kind === "AgentTrade") {
+      const keys = wd?.keys();
+      const adapter = appFor("minswap", network) ? minswapAdapter(network).rewardAddress : undefined;
+      if (!wd || !keys || keys.len() !== 1 || wd.get(keys.get(0)) !== 0n || keys.get(0).to_address().to_bech32() !== adapter)
+        return "a trade withdraws exactly zero, from this network's app adapter";
+    } else return "only an ordinary agent spend or trade goes through here; escalations go to the owners' inbox";
     if (!requiredSignersOf(txCbor).includes(agent)) return "the agent key must sign";
     return undefined;
   } catch (e) {

@@ -1,8 +1,8 @@
-// The paying agent's three tools, shared by the MCP server (separate signer) and gendo-agent (paired,
+// The paying agent's tools (budget, pay, approval, swap, order status), shared by the MCP server (separate signer) and gendo-agent (paired,
 // in-process signer). None of them can raise a limit: only the owners can.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { budget, pay, requestApproval, type AgentSession } from "../../sdk/src/node/session.js";
+import { budget, orderStatusOf, pay, requestApproval, swap, type AgentSession } from "../../sdk/src/node/session.js";
 
 const json = (x: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(x, null, 2) }] });
 
@@ -52,6 +52,36 @@ export function registerTools(
       annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async (args) => ready((s) => pay(s, args)),
+  );
+
+  server.registerTool(
+    "swap",
+    {
+      title: "Swap on a DeFi app",
+      description:
+        "Swap inside your budget on an app the owners enabled for you (see get_budget's apps), e.g. sell ADA for a token on Minswap. The chain enforces the owners' rules, including a worst acceptable price. Returns placed (with the minimum you'll receive), already_placed, or blocked with a code and the next step. Proceeds go to the vault's treasury, not back to your budget.",
+      inputSchema: {
+        app: z.string().describe('The app, e.g. "minswap"'),
+        pool: z.string().describe('A pool from get_budget, e.g. "ADA ↔ NACRE"'),
+        amount_ada: z.number().positive().optional().describe("ADA to sell"),
+        asset: z.object({ unit: z.string(), quantity: z.number().positive() }).optional().describe("Or: the pool's other asset to sell (policy id + name, and quantity)"),
+        intent_id: z.string().min(1).describe("Stable id for this swap. Reuse it on retries."),
+        purpose: z.string().describe("Short human-readable reason, recorded on-chain"),
+      },
+      annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async (args) => ready((s) => swap(s, args)),
+  );
+
+  server.registerTool(
+    "order_status",
+    {
+      title: "Check a swap",
+      description: "Whether a swap placed with the swap tool is still pending, was filled (and what the vault received), or was refunded.",
+      inputSchema: { tx: z.string().describe("The tx returned by swap") },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async (args) => ready((s) => orderStatusOf(s, args.tx)),
   );
 
   server.registerTool(

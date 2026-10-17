@@ -7,8 +7,9 @@ import { getConnInfo } from "@hono/node-server/conninfo";
 import { mountAuth, sha256 } from "./auth.js";
 import { mountPairing } from "./pairing.js";
 import { olderThan } from "../../sdk/src/core/version.js";
+import type { Network } from "../../sdk/src/core/index.js";
 import { MIN_AGENT } from "./agent-version.js";
-import { agentSpendProblem, mountPending, type SubmitResult } from "./pending.js";
+import { agentTxProblem, mountPending, type SubmitResult } from "./pending.js";
 import type { openStore } from "./store.js";
 
 // What the public page and the owner pages read. Never submit, accounts or pools: owners' txs
@@ -183,7 +184,7 @@ export function createApp(d: {
     const cbor = Buffer.from(await c.req.arrayBuffer()).toString("hex");
     const al = await d.allowanceOf(agent.policy, agent.unit);
     if (!al) return bfError(c, 403, "this allowance isn't on chain any more");
-    const problem = agentSpendProblem(cbor, agent.policy, al.ref, al.agent);
+    const problem = agentTxProblem(cbor, agent.policy, al.ref, al.agent, (d.network ?? "Preprod") as Network);
     if (problem) return bfError(c, 403, problem);
     d.store.setAgentVersion(al.agent, version);
     const r = await d.submit(cbor);

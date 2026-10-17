@@ -28,12 +28,18 @@ export interface ChainQuery {
   tipMs(): Promise<number | undefined>;
   /** Metadata value under `label` for `hash`, undefined if none. */
   txMetadata(hash: string, label: number): Promise<unknown | undefined>;
+  /** Any Blockfrost-shaped read (e.g. `/txs/<hash>/utxos`), undefined if unknown. Optional. */
+  getJson?(path: string): Promise<unknown | undefined>;
 }
 
 /** Blockfrost-compatible REST (Blockfrost, Yaci Store). */
 export function blockfrostQuery(url: string, projectId: string): ChainQuery {
   const get = (path: string) => fetch(`${url}${path}`, { headers: { project_id: projectId } });
   return {
+    async getJson(path) {
+      const r = await get(path);
+      return r.ok ? r.json() : undefined;
+    },
     async txExists(hash) {
       const r = await get(`/txs/${hash}`);
       return r.ok;

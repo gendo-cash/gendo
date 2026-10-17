@@ -21,6 +21,8 @@ export type SignerPolicy = {
   maxCoSignedTtlMs?: number;
   allowCoSigned: boolean;
   slot: { zeroTime: number; zeroSlot: number; slotLength: number };
+  /** Apps this agent may trade with: its adapter's reward address (the trade's one zero withdrawal) and where orders go. */
+  apps?: { adapterReward: string; orderAddress: string }[];
 };
 
 export type { SignerState } from "./state.js";
@@ -28,7 +30,7 @@ import type { SignerState } from "./state.js";
 
 export type Decision = { ok: true; out: Assets; coSigned?: true } | { ok: false; reason: string };
 
-/** Constructor index of the spend redeemer on input 0 (the allowance): 0 AgentSpend, 1 CoSignedSpend. */
+/** Constructor index of the spend redeemer on input 0 (the allowance): 0 AgentSpend, 1 CoSignedSpend, 3 AgentTrade. */
 function spendRedeemerIndex(tx: CML.Transaction): bigint | undefined {
   const reds = tx.witness_set().redeemers();
   const map = reds?.as_map_redeemer_key_to_redeemer_val();
@@ -63,7 +65,18 @@ export function evaluate(policy: SignerPolicy, state: SignerState, txCbor: strin
 
   // Agent and over-limit spends both draw from the allowance UTxO alone.
   if (body.inputs().len() !== 1) return { ok: false, reason: "a spend must have exactly one input, the allowance" };
-  if (body.mint() || body.withdrawals() || body.certs()) return { ok: false, reason: "mint/withdrawal/certificate not allowed" };
+  if (body.mint() || body.certs()) return { ok: false, reason: "mint/certificate not allowed" };
+  // A trade (AgentTrade) carries exactly one zero withdrawal: its app's adapter. Nothing else withdraws.
+  const trade = !coSigned && spendRedeemerIndex(tx) === 3n;
+  const wd = body.withdrawals();
+  let app: { adapterReward: string; orderAddress: string } | undefined;
+  if (trade) {
+    const keys = wd?.keys();
+    if (!wd || !keys || keys.len() !== 1 || wd.get(keys.get(0)) !== 0n) return { ok: false, reason: "a trade withdraws exactly zero, from its app's adapter" };
+    const reward = keys.get(0).to_address().to_bech32();
+    app = policy.apps?.find((a) => a.adapterReward === reward);
+    if (!app) return { ok: false, reason: "this agent isn't allowed to trade with that app (adapter withdrawal not in the signer policy)" };
+  } else if (wd) return { ok: false, reason: "withdrawal not allowed" };
 
   const ttl = body.ttl();
   if (ttl === undefined) return { ok: false, reason: "tx has no upper validity bound" };
@@ -82,8 +95,8 @@ export function evaluate(policy: SignerPolicy, state: SignerState, txCbor: strin
       continuing.push(o);
       continue;
     }
-    // An escalation may pay anyone: the owners approve each payee.
-    if (!coSigned && !policy.destinations.includes(addr)) return { ok: false, reason: `destination ${addr} not allowed by signer policy` };
+    // An escalation may pay anyone: the owners approve each payee. A trade may also pay its app's order address.
+    if (!coSigned && !policy.destinations.includes(addr) && addr !== app?.orderAddress) return { ok: false, reason: `destination ${addr} not allowed by signer policy` };
     paid.push(valueToAssets(o.amount()));
   }
   if (continuing.length !== 1) return { ok: false, reason: "expected exactly one continuing output at the vault" };

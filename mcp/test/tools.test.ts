@@ -36,4 +36,14 @@ describe("tools before ready", () => {
     const r = await client.callTool({ name: "get_budget", arguments: {} });
     expect(JSON.parse((r.content as { text: string }[])[0]!.text)).toEqual({ status: "not_ready", message: "x", notice: "An update to gendo 9.0.0 is available." });
   });
+  it("offers swap and order_status next to the payment tools", async () => {
+    const server = new McpServer({ name: "t", version: "0" });
+    registerTools(server, async () => ({ notReady: "x" }));
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "c", version: "0" });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(["get_budget", "order_status", "pay", "request_approval", "swap"]);
+    const r = await client.callTool({ name: "swap", arguments: { app: "minswap", pool: "ADA ↔ NACRE", amount_ada: 1, intent_id: "I", purpose: "p" } });
+    expect(JSON.parse((r.content as { text: string }[])[0]!.text)).toEqual({ status: "not_ready", message: "x" });
+  });
 });

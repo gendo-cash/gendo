@@ -8,6 +8,8 @@ import { describeTx } from "../../core/cosign.js";
 import type { AllowanceDatum } from "../../core/data.js";
 import { txFate, type ChainQuery, type Fate } from "../../core/idempotency.js";
 import { unitOf } from "../../core/limits.js";
+import { appFor } from "../../core/apps/catalogue.js";
+import { minswapAdapter } from "../../core/apps/minswap/adapter.js";
 import type { Vault } from "../../core/vault.js";
 import { checkIntent, factsOf } from "./dedupe.js";
 import { evaluate, type SignerPolicy } from "./policy.js";
@@ -114,5 +116,10 @@ export function policyFromAllowance(a: { datum: AllowanceDatum; unit: string; va
     maxCoSignedTtlMs: 2 * 3_600_000,
     allowCoSigned: true,
     slot: a.slot,
+    // The apps this allowance grants that the catalogue deploys on this network.
+    apps: a.datum.apps.flatMap((name) => {
+      const found = name === "minswap" ? appFor(name, a.network) : undefined;
+      return found ? [{ adapterReward: minswapAdapter(a.network).rewardAddress, orderAddress: found.network.orderAddress }] : [];
+    }),
   };
 }
