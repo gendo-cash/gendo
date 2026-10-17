@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # MCP server end to end on the devnet. Owners, signer and agent each get their
-# own VAULT_HOME, as in the skill. An MCP client drives the agent's three tools,
+# own VAULT_HOME, as in the skill. An MCP client drives the agent's tools,
 # then the owners sign the approval file the agent produced.
 # Requires: scripts/devnet.sh up
 set -euo pipefail

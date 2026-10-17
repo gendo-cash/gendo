@@ -29,8 +29,8 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
 };
 
 const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-if (JSON.stringify(tools) !== JSON.stringify(["get_budget", "pay", "request_approval"])) fail(`tools ${tools}`);
-ok("exactly three tools, none of them an owner operation");
+if (JSON.stringify(tools) !== JSON.stringify(["get_budget", "order_status", "pay", "request_approval", "swap"])) fail(`tools ${tools}`);
+ok("five tools (budget, pay, approval, swap, order status), none of them an owner operation");
 
 const b0 = await call("get_budget");
 const ada = b0.limits.find((l: { asset: string }) => l.asset === "ADA");

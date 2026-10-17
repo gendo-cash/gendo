@@ -121,7 +121,7 @@ cli/test/apps.sh                        # owners enable Minswap and grant it; th
 cli/test/smoke.sh                       # every CLI flow, 19 checks
 cli/test/separated.sh                   # the skill's setup with owners, signer and agent in separate homes
 cli/test/signer-user.sh                 # the signer as its own Linux user (runs in a container)
-mcp/test/e2e.sh                         # an MCP client driving the agent's three tools
+mcp/test/e2e.sh                         # an MCP client driving the agent's tools
 app/test/public-e2e.sh                  # the public vault page in headless Chrome, served by the keyless server
 app/test/owner-e2e.sh                   # two owners in two headless browsers: sign in, pause, unpause, a budget raise through the inbox, creating a 2-of-2 vault in the app; then enabling Minswap, connecting an agent, its payment and its swap over MCP
 server/test/approvals-e2e.sh            # owners sign in, pause, unpause and approve an agent request through the server
