@@ -20,6 +20,9 @@ import {
   txFacts,
   liveness as coreLiveness,
   payOnce,
+  tradeOnce,
+  appFor,
+  minswap,
   submitResolving,
   connect,
   cosign,
@@ -226,6 +229,51 @@ async function finishTx(lucid: LucidEvolution, tx: TxSignBuilder, v: { sign?: st
   return hash;
 }
 
+/** "--apps minswap,..." or "none". */
+const appsArg = (x?: string) => (x === undefined || x === "none" ? [] : list(x));
+
+/** Minswap settings from flags. Every one is required: owners choose each value (no defaults). */
+function minswapSettingsArg(lucid: LucidEvolution, v: { pools?: string; slippage?: string; fee?: string; ttl?: string; tip?: string }): minswap.MinswapSettings {
+  const found = appFor("minswap", lucid.config().network!) ?? die(`Minswap isn't available on ${lucid.config().network}`);
+  const pools = list(v.pools ?? die("--pools <lp name or label,...> required")).map(
+    (p) => found!.network.pools.find((x) => x.label === p || x.lpName === p)?.lpName ?? (/^[0-9a-f]{2,64}$/.test(p) ? p : die(`unknown pool ${p}`)),
+  );
+  return {
+    pools,
+    maxSlippageBps: BigInt(Math.round(Number(v.slippage ?? die("--slippage <percent> required")) * 100)),
+    maxBatcherFee: ada(v.fee ?? die("--fee <ada> required (max batcher fee)"))!,
+    maxOrderTtlMs: duration(v.ttl ?? die("--ttl <duration> required (max order lifetime)")),
+    maxCancelTip: ada(v.tip ?? die("--tip <ada> required (max cancel tip)"))!,
+  };
+}
+
+async function appChange(argv: string[], kind: "enable" | "update") {
+  // `--ttl` is taken by the tx TTL (main), so the order lifetime is `--order-ttl`; `--ttl` before it is the tx's.
+  const { values: v, positionals } = parseArgs({ args: argv, allowPositionals: true, options: appFlags });
+  if ((positionals[0] ?? "minswap") !== "minswap") die("only minswap is available");
+  const lucid = await connect(providerFromEnv());
+  const vault = vaultOf(lucid);
+  lucid.selectWallet.fromPrivateKey(loadKey(v.propose ?? die("--propose <key> required")).privateKey);
+  const settings = minswapSettingsArg(lucid, { ...v, ttl: v["order-ttl"] });
+  const app = minswap.minswapAppConfig(lucid.config().network!, settings);
+  const cfg = await readConfig(lucid, vault);
+  const signers = list(v.sign ?? v.signers).map(pkhOf);
+  const tx = kind === "enable" ? await owner.enableApp(lucid, vault, cfg, app, signers) : await owner.updateApp(lucid, vault, cfg, app, signers);
+  await finishTx(lucid, tx, v);
+}
+
+const appFlags = {
+  pools: { type: "string" as const },
+  slippage: { type: "string" as const },
+  fee: { type: "string" as const },
+  "order-ttl": { type: "string" as const },
+  tip: { type: "string" as const },
+  propose: { type: "string" as const },
+  sign: { type: "string" as const },
+  signers: { type: "string" as const },
+  out: { type: "string" as const },
+};
+
 // --- commands ----------------------------------------------------------------
 
 const commands: Record<string, (argv: string[]) => Promise<void>> = {
@@ -376,6 +424,7 @@ const commands: Record<string, (argv: string[]) => Promise<void>> = {
         "max-fee": { type: "string", default: "2" },
         fund: { type: "string" },
         "from-treasury": { type: "boolean" },
+        apps: { type: "string" },
         propose: { type: "string" },
         sign: { type: "string" },
         signers: { type: "string" },
@@ -399,6 +448,7 @@ const commands: Record<string, (argv: string[]) => Promise<void>> = {
         expiresAt: now + duration(v.expires!),
         maxFee: ada(v["max-fee"])!,
         fund: { lovelace: ada(v.fund) ?? die("--fund <ada> required") },
+        apps: appsArg(v.apps),
       },
       list(v.sign ?? v.signers).map(pkhOf),
       v["from-treasury"] ? { fromTreasury: await treasuryUtxos(lucid, vault) } : {},
@@ -448,6 +498,7 @@ const commands: Record<string, (argv: string[]) => Promise<void>> = {
         cap: { type: "string", multiple: true },
         "max-fee": { type: "string" },
         "top-up": { type: "string" },
+        apps: { type: "string" },
         propose: { type: "string" },
         sign: { type: "string" },
         signers: { type: "string" },
@@ -466,6 +517,7 @@ const commands: Record<string, (argv: string[]) => Promise<void>> = {
       caps,
       spent: v.cap ? caps.map(() => 0n) : al.datum.spent,
       ...(v["max-fee"] ? { maxFee: ada(v["max-fee"])! } : {}),
+      ...(v.apps !== undefined ? { apps: appsArg(v.apps) } : {}),
     };
     const tx = await owner.editAllowance(lucid, vault, await readConfig(lucid, vault), al, next, list(v.sign ?? v.signers).map(pkhOf), v["top-up"] ? { lovelace: ada(v["top-up"])! } : {});
     await finishTx(lucid, tx, v);
@@ -529,6 +581,76 @@ const commands: Record<string, (argv: string[]) => Promise<void>> = {
       const r = await payOnce({ ...base, allowanceUnit: unit }, { q: chainQuery(), journal: journal(), sign });
       if (r.status === "already-paid") out({ alreadyPaid: r.txHash, source: r.source, intentId });
       else out({ submitted: r.txHash, fee: r.built.fee, spent: r.built.next.spent, intent: r.built.intent });
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      out({ blocked: err.code ?? "SCRIPT_OR_LEDGER", reason: err.message.split("\n")[0]?.slice(0, 400) });
+      process.exitCode = 3;
+    }
+  },
+
+  async "app enable"(argv) {
+    await appChange(argv, "enable");
+  },
+
+  async "app update"(argv) {
+    await appChange(argv, "update");
+  },
+
+  async "app disable"(argv) {
+    const { values: v, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { propose: { type: "string" }, sign: { type: "string" }, signers: { type: "string" }, out: { type: "string" } } });
+    const lucid = await connect(providerFromEnv());
+    const vault = vaultOf(lucid);
+    lucid.selectWallet.fromPrivateKey(loadKey(v.propose ?? die("--propose <key> required")).privateKey);
+    const tx = await owner.disableApp(lucid, vault, await readConfig(lucid, vault), positionals[0] ?? die("usage: vault app disable minswap"), list(v.sign ?? v.signers).map(pkhOf));
+    await finishTx(lucid, tx, v);
+  },
+
+  async "app list"() {
+    const lucid = await connect(providerFromEnv());
+    const cfg = await readConfig(lucid, vaultOf(lucid));
+    out(cfg.config.apps.map((a) => ({ name: a.name, adapter: a.adapter, orderScript: a.orderScript, settings: a.name === "minswap" ? minswap.settingsFromData(a.settings) : a.settings })));
+  },
+
+  async "agent swap"(argv) {
+    const { values: v, positionals } = parseArgs({
+      args: argv,
+      allowPositionals: true,
+      options: {
+        agent: { type: "string" },
+        pool: { type: "string" },
+        ada: { type: "string" },
+        asset: { type: "string" },
+        "intent-id": { type: "string" },
+        purpose: { type: "string", default: "" },
+        "signer-socket": { type: "string" },
+      },
+    });
+    const intentId = v["intent-id"] ?? die("--intent-id <id> is required: one order per id");
+    const lucid = await connect(providerFromEnv());
+    const vault = vaultOf(lucid);
+    const unit = positionals[0] ?? die("usage: vault agent swap <allowance-unit> --pool <lp|label> --ada N --intent-id ID");
+    const found = appFor("minswap", lucid.config().network!) ?? die("Minswap isn't available on this network");
+    const pool = found!.network.pools.find((x) => x.label === v.pool || x.lpName === v.pool);
+    const lpName = pool?.lpName ?? (v.pool && /^[0-9a-f]{2,64}$/.test(v.pool) ? v.pool : die("--pool <lp name or label> required"));
+    const al = await readAllowance(lucid, vault, unit);
+    const agentAddr = addressOf(lucid, al.datum.agent);
+    const collateral = (await lucid.utxosAt(agentAddr)).find((u) => Object.keys(u.assets).length === 1 && !u.scriptRef) ?? die(`agent ${agentAddr} needs a pure-ADA UTxO for collateral`);
+    lucid.selectWallet.fromAddress(agentAddr, [collateral!]);
+    const [token, qty] = v.asset ? v.asset.split(":") : [];
+    const sign = (cbor: string) =>
+      v["signer-socket"] ? requestWitness(v["signer-socket"], cbor) : cosign.witness(lucid, cbor, loadKey(v.agent ?? die("--signer-socket or --agent <key> required")).privateKey);
+    try {
+      const r = await tradeOnce(
+        {
+          lucid, vault, allowanceUnit: unit, collateral: collateral!, refScript: await refScriptOf(lucid), pool: lpName,
+          amountIn: token ? BigInt(qty!) : ada(v.ada ?? die("--ada N or --asset unit:qty required"))!,
+          aToB: token ? pool?.assetA === token : pool ? pool.assetA === "lovelace" : true,
+          intentId, purpose: v.purpose!, ref: intentId,
+        },
+        { q: chainQuery(), journal: journal(), sign },
+      );
+      if (r.status === "already-traded") out({ alreadyTraded: r.txHash, source: r.source, intentId });
+      else out({ submitted: r.txHash, fee: r.built.fee, minimumReceive: r.built.order.minimumReceive, expiresAt: new Date(Number(r.built.order.expiry)).toISOString(), spent: r.built.next.spent });
     } catch (e) {
       const err = e as Error & { code?: string };
       out({ blocked: err.code ?? "SCRIPT_OR_LEDGER", reason: err.message.split("\n")[0]?.slice(0, 400) });
@@ -703,7 +825,10 @@ const HELP = `vault <command>
   config set [--owners ..] [--threshold N] [--pause|--unpause] [--max-validity 10m] --propose a --sign a,b
   allowance grant --agent k --dest addr1,addr2 --cap lovelace:WINDOW_ADA:TX_ADA [--period 1d] [--expires 30d]
                   [--max-fee 2] --fund N [--from-treasury] --propose a --sign a,b
-  allowance list | edit <unit> ... | revoke <unit> --propose a --sign a,b
+  allowance list | edit <unit> ... [--apps minswap|none] | revoke <unit> --propose a --sign a,b
+  app enable|update minswap --pools <lp|label,...> --slippage <pct> --fee <ada> --order-ttl <dur> --tip <ada> --propose a --sign a,b
+      (every flag required: no defaults)   app disable minswap --propose a --sign a,b   app list
+  agent swap <unit> --pool <lp|label> (--ada N | --asset unit:qty) --intent-id ID --purpose "..." (--signer-socket path | --agent k)
   agent spend <unit> --to addr --ada N --intent-id ID --purpose "..." (--signer-socket path | --agent k) [--skip-preflight]
   agent overlimit <unit> --to addr --ada N --intent-id ID --purpose "..." --cosigners a,c --out tx.cbor
   tx describe <tx.cbor> | tx witness <tx.cbor> --key k --out k.wit | tx assemble <tx.cbor> <wits...>
