@@ -101,3 +101,35 @@ lib/vault/allowance.ak	fn\(o\) \{ o.address == order_address \}	fn(o) { o.addres
 lib/vault/allowance.ak	Script\(h\) -> h == vault	Script(_) -> True
 lib/vault/allowance.ak	expect \[Pair\(Script\(adapter\), 0\)\] = tx.withdrawals	expect [Pair(Script(adapter), _)] = tx.withdrawals
 lib/vault/allowance.ak	list.find\(cfg.apps, fn\(a\) \{ a.adapter == adapter \}\)	list.find(cfg.apps, fn(_a) { True })
+lib/apps/minswap/place.ak	expect \[input\] = tx.inputs	expect [input, ..] = tx.inputs
+lib/apps/minswap/place.ak	expect list.has\(allowance.apps, app.name\)	expect True
+lib/apps/minswap/place.ak	expect app.order_script == dep.order_script	expect True
+lib/apps/minswap/place.ak	expect valid_settings\(s\)	expect True
+lib/apps/minswap/place.ak	expect n >= 1 && n <= max_orders	expect n <= max_orders
+lib/apps/minswap/place.ak	expect n >= 1 && n <= max_orders	expect n >= 1
+lib/apps/minswap/place.ak	o.address == order_address && valid_order	True && valid_order
+lib/apps/minswap/place.ak	s.max_slippage_bps <= max_slippage,	True,
+lib/apps/minswap/place.ak	expect o.reference_script == None	expect True
+lib/apps/minswap/place.ak	expect od.canceller == OAMWithdrawScript\(own\)	expect True
+lib/apps/minswap/place.ak	expect od.success_receiver == home	expect True
+lib/apps/minswap/place.ak	expect od.refund_receiver == home	expect True
+lib/apps/minswap/place.ak	expect od.success_receiver_datum == EODNoDatum	expect True
+lib/apps/minswap/place.ak	expect od.refund_receiver_datum == EODNoDatum	expect True
+lib/apps/minswap/place.ak	expect SAOSpecificAmount \{ swap_amount: amount \} = swap_amount_option	let amount = when swap_amount_option is { SAOSpecificAmount(a) -> a  ms.SAOAll(_) -> 5_000_000 }
+lib/apps/minswap/place.ak	expect killable\n	expect True\n
+lib/apps/minswap/place.ak	expect amount > 0	expect True
+lib/apps/minswap/place.ak	expect od.lp_asset.policy_id == dep.lp_policy	expect True
+lib/apps/minswap/place.ak	expect list.has\(s.pools, od.lp_asset.asset_name\)	expect True
+lib/apps/minswap/place.ak	expect od.max_batcher_fee >= 0	expect True
+lib/apps/minswap/place.ak	expect od.max_batcher_fee <= s.max_batcher_fee	expect True
+lib/apps/minswap/place.ak	expect expiry <= upper \+ s.max_order_ttl_ms	expect True
+lib/apps/minswap/place.ak	expect tip >= 0\n	expect True\n
+lib/apps/minswap/place.ak	expect tip <= s.max_cancel_tip	expect True
+lib/apps/minswap/place.ak	assets.is_zero\(extra\)	True
+lib/apps/minswap/place.ak	minimum_receive \* fee_denominator >=	minimum_receive * fee_denominator + 1_000_000 >=
+lib/apps/minswap/place.ak	if a_to_b_direction \{	if !a_to_b_direction {
+lib/apps/minswap/place.ak	i.output.address.payment_credential == Script\(dep.pool_script\),	True,
+lib/apps/minswap/place.ak	assets.quantity_of\(i.output.value, dep.lp_policy, pool_auth_name\) == 1,	True,
+lib/apps/minswap/place.ak	assets.quantity_of\(i.output.value, dep.lp_policy, lp\) > 0,	True,
+lib/apps/minswap/place.ak	list.length\(s.pools\) <= max_pools,	True,
+validators/apps/minswap.ak	      _ -> False	      _ -> True
