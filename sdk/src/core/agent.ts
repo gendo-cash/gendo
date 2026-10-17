@@ -58,7 +58,7 @@ export type BuiltSpend = {
 };
 
 /** Slot-aligned validity: exactly the [lower, upper] (inclusive ms) the script will see. */
-function validity(req: SpendRequest) {
+export function validity(req: Omit<SpendRequest, "payments">) {
   const { lucid, allowance, config } = req;
   const d = allowance.datum;
   const now = req.now ?? Date.now();
@@ -99,7 +99,7 @@ function normalisePayments(lucid: LucidEvolution, payments: Payment[]): Payment[
   return payments.map((p) => ({ to: p.to, assets: withMinAda(lucid, p.to, p.assets) }));
 }
 
-function makeIntent(req: SpendRequest, kind: Intent["kind"], payments: Payment[]): Intent {
+export function makeIntent(req: Omit<SpendRequest, "payments">, kind: Intent["kind"], payments: Payment[]): Intent {
   if (!req.intentId) throw new Error("intentId is required (idempotency key)");
   return {
     v: 1,
@@ -114,8 +114,8 @@ function makeIntent(req: SpendRequest, kind: Intent["kind"], payments: Payment[]
   };
 }
 
-/** Datum the validator will demand; with skipPreflight, computed without limit checks. */
-function computeNext(req: SpendRequest, delta: Assets, fee: bigint, lower: bigint, upper: bigint, payments: Payment[]) {
+/** Datum the validator will demand; with skipPreflight, computed without limit checks. `payments` are the outputs checked against the payee list. */
+export function computeNext(req: Omit<SpendRequest, "payments">, delta: Assets, fee: bigint, lower: bigint, upper: bigint, payments: Payment[]) {
   const args = {
     datum: req.allowance.datum,
     config: req.config.config,
@@ -169,9 +169,9 @@ const lesser = (a: bigint, b: bigint) => (a < b ? a : b);
  * the per-payment and period caps on lovelace (the fee is charged to both) and
  * `max_fee`. Throws the matching LimitError when the payments alone don't fit.
  */
-function feeRoom(req: SpendRequest, payments: Payment[], v: ReturnType<typeof validity>) {
+export function feeRoom(req: Omit<SpendRequest, "payments">, payments: Payment[], v: ReturnType<typeof validity>, outflow?: Assets) {
   const d = req.allowance.datum;
-  const paid = add(...payments.map((p) => p.assets));
+  const paid = outflow ?? add(...payments.map((p) => p.assets));
   computeNext(req, paid, 0n, v.lower, v.upper, payments); // refuses early, with the right code
   const i = d.caps.findIndex((c) => c.policy === "" && c.name === "");
   const w = windowFor(d, v.lower, v.upper);

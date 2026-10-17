@@ -4,7 +4,7 @@
 import { Data } from "@lucid-evolution/lucid";
 import { describe, expect, it } from "vitest";
 import { allowanceFromData, allowanceToData, configFromData, configToData, spendRedeemer, type AllowanceDatum, type ConfigDatum } from "../../src/core/data.js";
-import { orderDatumFromData, orderDatumToData, poolDatumFromData, settingsFromData, settingsToData, type MinswapOrder, type MinswapSettings } from "../../src/core/apps/minswap/data.js";
+import { orderDatumFromData, orderDatumToData, poolDatumFromData, poolDatumToData, settingsFromData, settingsToData, type MinswapOrder, type MinswapSettings } from "../../src/core/apps/minswap/data.js";
 
 const G = {
   order: "D8799FD87B9F581CAD000000000000000000000000000000000000000000000000000000FFD8799FD87A9F581C0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0AFFD87A80FFD87980D8799FD87A9F581C0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0AFFD87A80FFD87980D8799F581CD6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6424C50FFD8799FD87A80D8799F1A004C4B40FF1A009390C4D87A80FF1A000F4240D8799F9F1B0000019B7751ACC000FFFFFF",
@@ -91,5 +91,12 @@ describe("app datums match the chain's encoding", () => {
   });
   it("the AgentTrade redeemer is constructor 3", () => {
     same(spendRedeemer({ kind: "AgentTrade", intentHash: "1e".repeat(32) }), G.redeemer);
+  });
+});
+
+describe("pool fixtures", () => {
+  it("encode like Minswap's pool datum", () => {
+    const pool = poolDatumFromData(G.pool.toLowerCase());
+    same(poolDatumToData({ ...pool, batchingStakeScript: "fb".repeat(28) }), G.pool);
   });
 });

@@ -21,5 +21,8 @@ export * from "./explain.js";
 export * from "./liveness.js";
 export * from "./witnesses.js";
 export { payOnce, type PayResult } from "./pay.js";
+export { tradeOnce, type TradeResult } from "./trade.js";
+export * from "./apps/catalogue.js";
+export * as minswap from "./apps/minswap/index.js";
 export { Blockfrost, CML, Data, Lucid, SLOT_CONFIG_NETWORK, credentialToAddress, generatePrivateKey, getAddressDetails } from "@lucid-evolution/lucid";
 export type { Assets, LucidEvolution, TxSignBuilder, UTxO } from "@lucid-evolution/lucid";

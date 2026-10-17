@@ -23,7 +23,8 @@ export class LimitError extends Error {
       | "TX_CAP"
       | "WINDOW_CAP"
       | "FEE"
-      | "DESTINATION",
+      | "DESTINATION"
+      | "APP",
     message: string,
   ) {
     super(`${code}: ${message}`);

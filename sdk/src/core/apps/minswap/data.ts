@@ -118,3 +118,22 @@ export function poolDatumFromData(cbor: string): MinswapPool {
   const [, a, b, total, ra, rb, fa, fb] = c.fields;
   return { assetA: asset(a!), assetB: asset(b!), totalLiquidity: total as bigint, reserveA: ra as bigint, reserveB: rb as bigint, feeA: fa as bigint, feeB: fb as bigint };
 }
+
+/** A pool datum, for devnet fixtures and tests (gendo never writes pools on preprod). */
+export function poolDatumToData(p: MinswapPool & { batchingStakeScript: Hex }): string {
+  const asset = (a: { policy: Hex; name: Hex }) => new Constr(0, [a.policy, a.name]);
+  return Data.to(
+    new Constr(0, [
+      new Constr(0, [new Constr(1, [p.batchingStakeScript])]), // Inline(Script(hash))
+      asset(p.assetA),
+      asset(p.assetB),
+      p.totalLiquidity,
+      p.reserveA,
+      p.reserveB,
+      p.feeA,
+      p.feeB,
+      new Constr(1, []), // fee_sharing_numerator_opt: None
+      new Constr(0, []), // allow_dynamic_fee: False
+    ]),
+  );
+}

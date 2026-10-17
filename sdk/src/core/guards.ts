@@ -17,7 +17,7 @@ export function assertAgentShape(
   tx: TxSignBuilder,
   allowance: UTxO,
   collateral: UTxO,
-  expect: { outputs: number; fee: bigint },
+  expect: { outputs: number; fee: bigint; /** A trade: exactly one zero withdrawal, from this reward address. */ withdrawal?: string },
 ) {
   const body = bodyOf(tx);
   const inputs = body.inputs();
@@ -30,7 +30,14 @@ export function assertAgentShape(
     throw new GuardError(`expected ${expect.outputs} outputs, got ${body.outputs().len()} (unexpected change output?)`);
   if (body.fee() !== expect.fee) throw new GuardError(`fee ${body.fee()} != planned ${expect.fee}`);
   if (body.mint()) throw new GuardError("agent tx must not mint");
-  if (body.withdrawals()) throw new GuardError("agent tx must not withdraw");
+  const wd = body.withdrawals();
+  if (expect.withdrawal === undefined) {
+    if (wd) throw new GuardError("agent tx must not withdraw");
+  } else {
+    const keys = wd?.keys();
+    if (!wd || !keys || keys.len() !== 1 || keys.get(0).to_address().to_bech32() !== expect.withdrawal || wd.get(keys.get(0)) !== 0n)
+      throw new GuardError("a trade withdraws exactly zero, from its app's adapter");
+  }
   if (body.certs()) throw new GuardError("agent tx must not carry certificates");
   assertTestnetOutputs(body);
 }

@@ -10,12 +10,14 @@ export type Intent = {
   v: 1;
   /** Caller-chosen idempotency key (e.g. invoice id). One payment per id per operator. */
   id: string;
-  kind: "agent_spend" | "co_signed_spend";
+  kind: "agent_spend" | "co_signed_spend" | "agent_trade";
   allowance: string; // allowance token unit
   agent: string; // agent key hash
   payments: { to: string; assets: Record<string, string> }[];
   purpose: string; // free text from the agent, e.g. "pay invoice #123"
   ref?: string; // external reference (invoice id, ticket, ...)
+  /** A trade: what the order asks for (the chain-checked values live in the order datum). */
+  trade?: { app: string; pool: string; amount_in: string; minimum_receive: string };
   created_at: string; // ISO 8601
 };
 

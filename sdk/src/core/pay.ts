@@ -1,7 +1,7 @@
 // payOnce: the idempotent agent payment an integrator should call.
 import type { LucidEvolution } from "@lucid-evolution/lucid";
 import { buildAgentSpend, type BuiltSpend, type SpendRequest } from "./agent.js";
-import { awaitSettled, readAllowance, readConfig } from "./chain.js";
+import { awaitSettled, readAllowance, readConfig, type AllowanceUtxo, type ConfigUtxo } from "./chain.js";
 import { assemble } from "./cosign.js";
 import { assertNotPaid, markLanded, NeverLands, submitResolving, type ChainQuery, type IntentJournal } from "./idempotency.js";
 import { INTENT_LABEL } from "./intent.js";
@@ -17,8 +17,19 @@ export type PayResult = { status: "paid"; txHash: string; built: BuiltSpend } | 
  */
 export async function payOnce(
   req: Omit<SpendRequest, "allowance" | "config"> & { allowanceUnit: string },
-  deps: { q: ChainQuery; journal: IntentJournal; sign: (txCbor: string) => Promise<string>; maxRebuilds?: number; pollMs?: number },
+  deps: OnceDeps,
 ): Promise<PayResult> {
+  return spendOnce(req, deps, buildAgentSpend);
+}
+
+export type OnceDeps = { q: ChainQuery; journal: IntentJournal; sign: (txCbor: string) => Promise<string>; maxRebuilds?: number; pollMs?: number };
+
+/** The at-most-once machinery for any agent tx built from the allowance (a payment, a trade). */
+export async function spendOnce<R extends { lucid: LucidEvolution; vault: SpendRequest["vault"]; intentId: string; tipMs?: number }, B extends BuiltSpend>(
+  req: R & { allowanceUnit: string },
+  deps: OnceDeps,
+  build: (r: R & { allowance: AllowanceUtxo; config: ConfigUtxo }) => Promise<B>,
+): Promise<{ status: "paid"; txHash: string; built: B } | { status: "already-paid"; txHash: string; source: "journal" | "chain" }> {
   const { lucid } = req;
   try {
     const current = await readAllowance(lucid, req.vault, req.allowanceUnit);
@@ -29,7 +40,7 @@ export async function payOnce(
     throw e;
   }
   for (let attempt = 0; ; attempt++) {
-    const built = await buildAgentSpend({
+    const built = await build({
       ...req,
       tipMs: (await deps.q.tipMs()) ?? req.tipMs,
       allowance: await readAllowance(lucid, req.vault, req.allowanceUnit),
