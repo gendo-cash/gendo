@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "gendo",
   "display_name": "gendo",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Give your AI a capped Cardano budget. Pair it with a code from the gendo app.",
   "author": {
     "name": "gendo",
@@ -39,6 +39,14 @@
     {
       "name": "request_approval",
       "description": "Ask the owners to approve a payment over its limits"
+    },
+    {
+      "name": "swap",
+      "description": "Swap inside its budget on an app the owners enabled (Minswap)"
+    },
+    {
+      "name": "order_status",
+      "description": "Whether a swap is pending, filled or refunded"
     }
   ],
   "user_config": {

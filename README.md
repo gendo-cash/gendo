@@ -80,14 +80,16 @@ The name is 限度 (*gendo*), Japanese for a limit, as in 限度額, the spendin
 - An agent can only pay allowlisted addresses and only move allowlisted assets.
 - Allowances expire on their own and can be revoked at any time, even if the agent has corrupted its own state.
 - Rotating owners never changes the vault's address.
+- An agent can swap only on an app the owners enabled and allowed for it, only in approved pools, never below the owners' worst acceptable price, and what comes back always goes to the vault's treasury.
 
-What is proven today is accounts payable: an agent paying invoices to approved payees. DeFi access is on the [roadmap](#roadmap), not a guarantee.
+What is proven today: accounts payable (an agent paying invoices to approved payees) and Minswap swaps on the local devnet, through the adapter described in [Apps](#apps-defi-inside-the-budget). On preprod the adapter isn't deployed yet, and no swap has been filled by a real batcher yet.
 
 ## Contents
 - [How it works](#how-it-works)
 - [Get started](#get-started)
 - [Run the tests](#run-the-tests)
 - [Architecture](#architecture)
+- [Apps: DeFi inside the budget](#apps-defi-inside-the-budget)
 - [On-chain rules](#on-chain-rules)
 - [Threat model: every edge and its resolution](#threat-model-every-edge-and-its-resolution)
 - [What Cardano can't enforce exactly](#what-cardano-cant-enforce-exactly)
@@ -101,8 +103,8 @@ What is proven today is accounts payable: an agent paying invoices to approved p
 ```bash
 # on-chain: build, tests (unit + property + adversarial), mutation suite, budget check
 scripts/aiken.sh build && scripts/aiken.sh check
-scripts/mutate-all.sh            # every guard must be load-bearing (85 mutations)
-scripts/budget.sh                # max-size paths < 50% of the per-tx limit
+scripts/mutate-all.sh            # every guard must be load-bearing (134 mutations, the Minswap adapter included)
+scripts/budget.sh                # max-size paths < 50% of the per-tx limit (a trade: vault + adapter together, 48%)
 
 # SDK: unit + emulator flows
 cd sdk && npm ci && npx vitest run test/unit test/emulator
@@ -113,13 +115,15 @@ cd app && npm ci && npx vitest run && npx vite build && node test/bundle-check.m
 
 # ledger-real: adversarial replay + double-pay + CLI + LLM agent on a local devnet (Docker)
 scripts/devnet.sh up
-cd sdk && npx vitest run test/yaci      # 38 attacks rejected for the expected reason + 6 double-pay scenarios
+scripts/devnet-apps.sh                  # devnet stand-in for Minswap: fixture pool, adapter registered (idempotent)
+cd sdk && npx vitest run test/yaci      # 38 attacks + 9 trade attacks rejected by the ledger, an honest trade accepted, 6 double-pay scenarios
+cli/test/apps.sh                        # owners enable Minswap and grant it; the agent swaps; refusals
 cli/test/smoke.sh                       # every CLI flow, 19 checks
 cli/test/separated.sh                   # the skill's setup with owners, signer and agent in separate homes
 cli/test/signer-user.sh                 # the signer as its own Linux user (runs in a container)
 mcp/test/e2e.sh                         # an MCP client driving the agent's three tools
 app/test/public-e2e.sh                  # the public vault page in headless Chrome, served by the keyless server
-app/test/owner-e2e.sh                   # two owners in two headless browsers: sign in, pause, unpause, a budget raise through the inbox, creating a 2-of-2 vault in the app
+app/test/owner-e2e.sh                   # two owners in two headless browsers: sign in, pause, unpause, a budget raise through the inbox, creating a 2-of-2 vault in the app; then enabling Minswap, connecting an agent, its payment and its swap over MCP
 server/test/approvals-e2e.sh            # owners sign in, pause, unpause and approve an agent request through the server
 agent/test/e2e.sh                       # LLM agent (local Ollama model) paying invoices through the signer
 
@@ -181,6 +185,37 @@ flowchart LR
 
 Ported code is **not** audited code. The audit covers Sundae's composition at commit 504e104 on stdlib v2, not this one. `aiken-design-patterns` has no published audit.
 
+## Apps: DeFi inside the budget
+
+An **app** is a DeFi protocol gendo supports through one small on-chain **adapter**. Minswap V2 swaps are the first; it is the only DEX on preprod whose orders a script can own and refund.
+
+- **Owners enable it per vault** (Apps tab, or `cli/vault app enable minswap ...`), with their rules: the pools allowed, the max slippage, the max batcher fee, the order lifetime and the cancel tip. There are no defaults: owners set every value. It's a settings change, signed at the threshold.
+- **Owners allow it per agent** in its budget (`--apps minswap` on the CLI).
+- **The agent swaps** with the MCP `swap` tool (or `cli/vault agent swap`). Everything that leaves the allowance counts against its limits: the swap amount, Minswap's 2 ADA deposit, the batcher fee, the cancel tip and the tx fee. **Proceeds and refunds go to the vault's treasury**, which only owners spend, and never restore the agent's budget: the budget limits turnover, not exposure.
+- **The chain checks every order** (the Minswap adapter, `onchain/lib/apps/minswap/place.ak`): only this adapter can cancel it; both receivers are the vault's own address with no datum; only swap-exact-in for a stated amount, cancelled if the price misses; an allowed pool, proven genuine by Minswap's pool token at Minswap's pool script; a bounded batcher fee, lifetime and tip; no extra tokens or reference script; and a **price floor read from the pool's own reserves**: `minimum_receive ≥ fair × (1 − slippage)`, with Minswap's formula. No oracle. A hijacked agent that first moves the pool itself is bounded by the floor plus its budget; the floor bounds that, it doesn't eliminate it.
+- **Orders expire.** After the lifetime, anyone can refund an unfilled order to the vault through Minswap's own path (tested against Minswap's own validators). Cancelling earlier isn't built yet.
+
+The **catalogue** (`sdk/src/core/apps/catalogue.ts`) lists the supported apps per network. Being listed grants nothing: a vault trusts an adapter only once its owners put the adapter's hash in their config.
+
+### Adding an app
+A pull request adds:
+1. the adapter under `onchain/validators/apps/` and its rules under `onchain/lib/apps/<app>/`, with unit tests for every rule and mutations in `scripts/mutations.tsv`;
+2. the SDK module under `sdk/src/core/apps/<app>/` (encodings, quote, order builder, the off-chain mirror of the adapter);
+3. a catalogue entry with its deployment per network, and no default settings;
+4. tests that evaluate the SDK's encodings against the protocol's own validators (see `sdk/test/emulator/minswap-compat.test.ts`): an order the protocol can't decode is stuck forever.
+
+An app is listed after review and an audit of its adapter.
+
+### Vaults from before the apps update
+The apps update changed the vault's code, so every vault's address changed with it. Vaults created before it still exist on preprod with their funds, but the app no longer shows them and the current CLI can't reach them. To move funds out, use the CLI from before the update:
+```bash
+git checkout a211626          # the last version before apps
+cd sdk && npm ci && cd ..
+VAULT_HOME=<the old vault's home> cli/vault allowance revoke <unit> --propose <you> --sign <owners>
+VAULT_HOME=<the old vault's home> cli/vault treasury pay --to <your address> --ada <amount> --propose <you> --sign <owners>
+```
+Without the old home, `vault join <old id>` recreates it.
+
 ## On-chain rules
 
 **`AgentSpend { intent_hash }`** is the autonomous path (`onchain/lib/vault/allowance.ak`):
@@ -205,12 +240,18 @@ The input datum is **fully validated on every agent-signed spend**, and every fi
 - a bad agent key;
 - an unparseable datum.
 
-**`CoSignedSpend { intent_hash }`** is the over-limit path. It needs the same datum validation, intent check, pause check and role-disjointness check, and **the agent's signature plus the owner threshold** in one tx. There is no on-chain proposal object.
+**`AgentTrade { intent_hash }`** is the trade path. It shares every rule above except withdrawals and the destination rule:
+- the tx has **exactly one withdrawal: zero, from the adapter** of an app that is in the config **and** in the allowance's `apps`;
+- every other output is an approved destination or an order at that app's order script (its enterprise address, exactly), and there is at least one order;
+- the adapter, running as that withdraw-zero, checks what each order says (see [Apps](#apps-defi-inside-the-budget)).
+The datum's `apps` list (at most 4 names, no duplicates) is checked with the rest of the datum.
+
+**`CoSignedSpend { intent_hash }`** is the over-limit path. It needs the same datum validation, intent check, pause check and role-disjointness check, and **the agent's signature plus the owner threshold** in one tx. Its outputs can't pay a script other than the vault. There is no on-chain proposal object.
 
 **`OwnerManage`** needs the owner threshold only:
 - **Treasury moves.**
 - **Allowance edits and reclaims.** These never decode the allowance datum, so a corrupted allowance is always reclaimable.
-- **Config updates.** These are validated at write time: 1 ≤ threshold ≤ n ≤ 10, no duplicate owners, 28-byte keys, max validity > 0. The NFT is re-locked at the canonical address.
+- **Config updates.** These are validated at write time: 1 ≤ threshold ≤ n ≤ 10, no duplicate owners, 28-byte keys, max validity > 0, at most 4 apps with unique 1–32-byte names and 28-byte adapter and order-script hashes. The NFT is re-locked at the canonical address.
 
 **Emergency pause** is the one exception to the threshold. Any single current owner may pause an unpaused vault, and change nothing else: the config output keeps its exact value, address and every other field. Unpausing, and every other change, needs the threshold.
 
@@ -346,15 +387,16 @@ The adversary is a compromised agent key that builds arbitrary transactions.
   - Lucid's emulator does not run Plutus scripts on submit. Emulator tests cover honest flows, which Lucid's local UPLC still evaluates against the real validator. Adversarial claims are only made from the real-node suite.
 - **One spend per allowance per block.** Each spend consumes the allowance UTxO and creates the next one, so an allowance pays at most once per block (about every 20 s on preprod). That fits invoices and payouts, not per-request micropayments. Today the workaround is several allowances per agent. **v2 mitigation:** sharded sub-allowances. One grant is split into N shard UTxOs, each with 1/N of the caps, so the agent can spend from up to N shards in the same block while the total never exceeds the grant. The cost is that a single payment is bounded by one shard's cap.
 - **Over-limit spends draw only from the allowance UTxO**, whose datum is carried over unchanged. Owners top it up (`allowance edit --top-up`) first if needed.
-- **Only key-address destinations, ADA plus native tokens, at most 10 owners, 10 destinations and 5 assets.**
+- **Only key-address destinations, ADA plus native tokens, at most 10 owners, 10 destinations and 5 assets.** Script outputs only as orders through an enabled app's adapter.
+- **Apps:** Minswap swaps only: no early cancel (orders expire and refund), no LP positions, no lending. The adapter isn't audited. Preprod's batchers run in bursts, so an order can wait hours or days. On preprod the adapter isn't deployed yet; swaps are tested on the local devnet (a fixture pool stands in for Minswap's) and against Minswap's own order and expiry validators in the emulator. No order of ours has been filled by a real batcher yet.
 - **The signer daemon is a reference implementation.** Rate counters, per-asset daily budgets and the intent-id dedupe table persist across restarts in a local JSON file. Keys live in local files and there is no KMS/HSM.
 - **The LLM agent is a demo, not a product.** It runs a local model (Ollama, OpenAI-compatible API). The model only chooses invoice ids; payees and amounts come from the invoice data, and every spend passes the signer and the on-chain limits.
-- **No UI, no mainnet, no script destinations, no governance.** All are out of scope by design.
+- **No mainnet, no governance.** Both are out of scope by design.
 
 ## Roadmap
 Not built yet. None of this is a guarantee until it ships with tests and an audit.
 - **The owner app, next steps.** It exists today (preprod; `server/gendo-server` serves it): owners sign in with their own CIP-30 wallets, see every change computed from the chain before signing, approve agent requests, pause, and edit agents; plus a public read-only page per vault. Owners can also create a vault in the app; co-owners then see it offered on their start page. Still to come: invite links (today co-owners are named by address), notifications, and an activity feed that includes revoked agents and treasury movements. It uses a small keyless server for pending approvals and notifications. **That server can affect liveness, never custody:** if it's down or hostile, approvals and notifications stop, but no funds can move without owners' wallets, and the CLI remains the fallback for every owner action.
-- **DeFi through per-protocol adapters.** Opt-in per protocol. Each adapter is a small validator, audited before it ships, that forces all proceeds back to the vault. The first target is Minswap V2 swaps. Design and preprod verifications: `docs/DEFI_SPIKE.md`.
+- **More from apps.** Minswap swaps are built (see [Apps](#apps-defi-inside-the-budget)). Next: deploying the adapter on preprod, cancelling orders early (the agent, or owners after a revoke), owner-placed orders from the treasury, LP positions, and more apps through the catalogue. Lending waits for a protocol with a live preprod deployment and script-compatible redemption.
 - **Sharded sub-allowances** to lift the one-spend-per-block limit (see [Known limitations](#known-limitations)).
 - **A sliding window** in place of fixed windows, removing the 2× burst.
 - **On-chain idempotency**: a bounded ring of recent intent hashes in the allowance datum (see [Integrator guidance](#integrator-guidance-paying-exactly-once)).
@@ -372,7 +414,8 @@ Not built yet. None of this is a guarantee until it ships with tests and an audi
    - the `allowanceName` CBOR encoding must match Aiken `cbor.serialise`;
    - the intent hash binding;
    - signer policy decoding (it parses untrusted CBOR).
-8. **Tooling.** Run `scripts/mutate-all.sh`. Every listed guard must be killed by a test. Add mutations for anything you think is untested.
+8. **`agent_trade` and the Minswap adapter** (`onchain/lib/apps/minswap/place.ak`). Check that an order can't name anyone but the vault, that the pool used for the floor is the order's genuine pool, that the floor's integer arithmetic matches Minswap's, and that `in − continuing` still counts every order in full. The vendored Minswap types must match `minswap/minswap-dex-v2@c3293ad` exactly.
+9. **Tooling.** Run `scripts/mutate-all.sh`. Every listed guard must be killed by a test. Add mutations for anything you think is untested.
 
 ## Repository layout and versions
 ```

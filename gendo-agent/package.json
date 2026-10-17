@@ -1,6 +1,6 @@
 {
   "name": "@gendo-cash/agent",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "type": "module",
   "description": "Connect an AI agent to a gendo budget: an MCP server with its own key, paired from the gendo app.",

@@ -2,7 +2,7 @@ import { olderThan } from "../../../sdk/src/core/version.ts";
 
 // How an AI app installs gendo-agent with this pairing code already in it: the npm package at an exact
 // version (it ships a pinned dependency tree); Claude Desktop gets its bundle from the app's own domain.
-export const AGENT_VERSION = "0.1.2";
+export const AGENT_VERSION = "0.2.0";
 export const CLAUDE_BUNDLE = "/dl/gendo.mcpb";
 export const mcpConfig = (code: string, origin: string) => ({
   command: "npx" as const,
