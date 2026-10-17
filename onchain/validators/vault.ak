@@ -8,7 +8,8 @@ use vault/fixtures
 use vault/allowance
 use vault/owner
 use vault/types.{
-  AgentSpend, AllowanceDatum, AssetCap, CoSignedSpend, ConfigDatum, InitConfig,
+  AgentSpend, AgentTrade, AllowanceDatum, AppConfig, AssetCap, CoSignedSpend,
+  ConfigDatum, InitConfig,
   ManageAllowances, MintRedeemer, OwnerManage, SpendRedeemer, max_assets,
   max_destinations, max_owners,
 }
@@ -30,6 +31,8 @@ validator vault(seed: OutputReference) {
         allowance.agent_spend(own_input, vault_hash, intent_hash, tx)
       CoSignedSpend { intent_hash } ->
         allowance.co_signed_spend(own_input, vault_hash, intent_hash, tx)
+      AgentTrade { intent_hash } ->
+        allowance.agent_trade(own_input, vault_hash, intent_hash, tx)
     }
   }
 
@@ -196,4 +199,41 @@ test bench_cosigned_spend_max_sizes() {
 test bench_owner_reclaim_max_config() {
   let s = afx.Scenario { ..max_scenario(), signers: max_config().owners }
   vault.spend(fixtures.out_ref(0), None, OwnerManage, fixtures.out_ref(10), afx.build(s))
+}
+
+fn max_trade_scenario() -> afx.Scenario {
+  let s = max_scenario()
+  expect Some(base) = s.typed
+  let app =
+    fn(n: ByteArray, i: Int) {
+      AppConfig {
+        name: n,
+        adapter: fixtures.key(140 + i),
+        order_script: fixtures.key(150 + i),
+        settings: Void,
+      }
+    }
+  // The traded app is listed last: worst case for list.find and list.has.
+  let apps = [app("a", 0), app("b", 1), app("c", 2), afx.minswap_app()]
+  let d = AllowanceDatum { ..base, apps: ["a", "b", "c", "minswap"] }
+  let orders =
+    list.repeat(fixtures.plain_output(afx.order_address(), fixtures.ada(7)), 3)
+  afx.Scenario {
+    ..s,
+    input_datum: d,
+    typed: Some(d),
+    cfg: ConfigDatum { ..max_config(), apps: apps },
+    payments: list.concat(orders, list.take(s.payments, max_destinations - 3)),
+  }
+}
+
+test bench_agent_trade_max_sizes() {
+  let s = max_trade_scenario()
+  vault.spend(
+    fixtures.out_ref(0),
+    None,
+    AgentTrade { intent_hash: afx.intent },
+    fixtures.out_ref(10),
+    afx.build_trade(s),
+  )
 }

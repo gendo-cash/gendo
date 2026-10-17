@@ -4,7 +4,7 @@
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash}
 use aiken/interval.{Finite, Interval, IntervalBound}
-use cardano/address.{Address}
+use cardano/address.{Address, Script}
 use cardano/assets.{Assets}
 use cardano/transaction.{Input, Output, Transaction, placeholder}
 use vault/allowance.{allowance_name}
@@ -13,7 +13,7 @@ use vault/fixtures.{
   ada, agent_key, cfg_2_of_3, config_input, out_ref, output, plain_output,
   vault, wallet, wallet_with_stake,
 }
-use vault/types.{AllowanceDatum, AssetCap, ConfigDatum}
+use vault/types.{AllowanceDatum, AppConfig, AssetCap, ConfigDatum}
 
 pub const usd_policy: ByteArray =
   #"5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d"
@@ -215,4 +215,34 @@ pub fn build(s: Scenario) -> Transaction {
     extra_signatories: s.signers,
     validity_range: closed(s.lower, s.upper),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Trades: an order output to an app's order script, plus the adapter's
+// withdraw-zero. The adapter's own checks are tested in lib/apps.
+
+pub const adapter: ByteArray =
+  #"ad000000000000000000000000000000000000000000000000000000"
+
+pub const order_script: ByteArray =
+  #"0d000000000000000000000000000000000000000000000000000000"
+
+pub fn minswap_app() -> AppConfig {
+  AppConfig { name: "minswap", adapter, order_script, settings: Void }
+}
+
+pub fn order_address() -> Address {
+  Address { payment_credential: Script(order_script), stake_credential: None }
+}
+
+pub fn trade_scenario() -> Scenario {
+  Scenario {
+    ..scenario(AllowanceDatum { ..base_datum(), apps: ["minswap"] }),
+    cfg: ConfigDatum { ..cfg_2_of_3(), apps: [minswap_app()] },
+    payments: [plain_output(order_address(), ada(7))],
+  }
+}
+
+pub fn build_trade(s: Scenario) -> Transaction {
+  Transaction { ..build(s), withdrawals: [Pair(Script(adapter), 0)] }
 }

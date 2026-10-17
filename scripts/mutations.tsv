@@ -57,9 +57,10 @@ lib/vault/allowance.ak	expect tx.fee <= d.max_fee	expect True
 lib/vault/allowance.ak	expect q <= c.tx_cap	expect True
 lib/vault/allowance.ak	expect s \+ q <= c.window_cap	expect s + q <= c.window_cap + 1
 lib/vault/allowance.ak	AllowanceDatum \{ \.\.d, spent: new_spent, window_start: window_start \}	AllowanceDatum { ..d, spent: new_spent }
-lib/vault/allowance.ak	list.all\(payments, fn\(o\) \{ list.has\(d.destinations, o.address\) \}\)	True
+lib/vault/allowance.ak	`is_well_formed`.\n  list.all\(payments, fn\(o\) \{ list.has\(d.destinations, o.address\) \}\)	`is_well_formed`.\n  True
 lib/vault/allowance.ak	    is_well_formed\(d\),\n    agent_preconditions	    True,\n    agent_preconditions
-lib/vault/allowance.ak	threshold_met\(cfg, tx.extra_signatories\),\n  \}	True,\n  }
+lib/vault/allowance.ak	threshold_met\(cfg, tx.extra_signatories\),\n    // Owners	True,\n    // Owners
+lib/vault/allowance.ak	expect orders != \[\]\n  list.all\(payments, fn\(o\) \{ list.has\(d.destinations, o.address\) \}\)	expect orders != []\n  True
 lib/vault/allowance.ak	expect threshold_met\(find_config\(tx, vault\), tx.extra_signatories\)	expect True
 lib/vault/allowance.ak	expect minted != \[\]	expect True
 lib/vault/allowance.ak	        name != config_token_name,\n        or	        True,\n        or
@@ -93,3 +94,10 @@ lib/vault/owners.ak	bytearray.length\(a.adapter\) == 28,	True,
 lib/vault/owners.ak	bytearray.length\(a.order_script\) == 28,	True,
 lib/vault/allowance.ak	list.length\(d.apps\) <= max_apps,	True,
 lib/vault/allowance.ak	list.unique\(d.apps\) == d.apps,	True,
+lib/vault/allowance.ak	expect \[Pair\(Script\(adapter\), 0\)\] = tx.withdrawals	expect [Pair(Script(adapter), _), ..] = tx.withdrawals
+lib/vault/allowance.ak	expect list.has\(d.apps, app.name\)	expect True
+lib/vault/allowance.ak	expect orders != \[\]	expect True
+lib/vault/allowance.ak	fn\(o\) \{ o.address == order_address \}	fn(o) { o.address.payment_credential == order_address.payment_credential }
+lib/vault/allowance.ak	Script\(h\) -> h == vault	Script(_) -> True
+lib/vault/allowance.ak	expect \[Pair\(Script\(adapter\), 0\)\] = tx.withdrawals	expect [Pair(Script(adapter), _)] = tx.withdrawals
+lib/vault/allowance.ak	list.find\(cfg.apps, fn\(a\) \{ a.adapter == adapter \}\)	list.find(cfg.apps, fn(_a) { True })

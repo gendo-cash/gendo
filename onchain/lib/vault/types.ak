@@ -76,6 +76,10 @@ pub type SpendRedeemer {
   /// Owner threshold alone: treasury moves, config updates, allowance
   /// edits and reclaims. Never decodes an allowance datum.
   OwnerManage
+  /// Agent alone, within limits, placing orders through one app that is
+  /// enabled on the vault and granted to it; that app's adapter checks the
+  /// orders. Appended last: constructor indices must not move.
+  AgentTrade { intent_hash: ByteArray }
 }
 
 pub type MintRedeemer {

@@ -9,7 +9,7 @@ use aiken/primitive/bytearray
 use aiken_design_patterns/validity_range_normalization.{
   ClosedRange, normalize_time_range,
 }
-use cardano/address.{Script, VerificationKey}
+use cardano/address.{Address, Script, VerificationKey}
 use cardano/assets.{AssetName, Assets}
 use cardano/transaction.{InlineDatum, Input, Output, OutputReference, Transaction}
 use vault/config.{canonical_address, find_config, no_ref_scripts}
@@ -155,12 +155,32 @@ pub fn agent_spend(
   intent_hash: ByteArray,
   tx: Transaction,
 ) -> Bool {
+  // 2. Nothing else may move value in or out (edge V3).
+  expect tx.withdrawals == []
+  let (d, _cfg, payments) = agent_common(own_input, vault, intent_hash, tx)
+  // 6. Every other output pays an allowed destination, matched on the exact
+  //    full address (edge D1). v1 destinations are key addresses only.
+  //    Destinations are key-only by `is_well_formed`.
+  list.all(payments, fn(o) { list.has(d.destinations, o.address) })
+}
+
+/// What AgentSpend and AgentTrade share: the allowance is the only input, no
+/// mint, certificate, vote, proposal or donation, a well-formed datum, the
+/// agent's preconditions, one window, the continuing output, and the cap
+/// accounting over everything that left. Returns the datum, the config and
+/// every output other than the continuing one.
+fn agent_common(
+  own_input: Input,
+  vault: ScriptHash,
+  intent_hash: ByteArray,
+  tx: Transaction,
+) -> (AllowanceDatum, ConfigDatum, List<Output>) {
   // 1. The allowance is the only input (edges U1, U2, V2; no treasury or
   //    other allowance can be touched).
   expect [_] = tx.inputs
-  // 2. Nothing else may move value in or out (edge V3).
+  // 2. Nothing else may move value in or out (edge V3). Withdrawals are each
+  //    caller's rule.
   expect assets.is_zero(tx.mint)
-  expect tx.withdrawals == []
   expect tx.certificates == []
   expect tx.votes == []
   expect tx.proposal_procedures == []
@@ -227,10 +247,33 @@ pub fn agent_spend(
     continuing.datum == InlineDatum(
       AllowanceDatum { ..d, spent: new_spent, window_start: window_start },
     )
+  (d, cfg, payments)
+}
 
-  // 6. Every other output pays an allowed destination, matched on the exact
-  //    full address (edge D1). v1 destinations are key addresses only.
-  //    Destinations are key-only by `is_well_formed`.
+// ---------------------------------------------------------------------------
+// Spend: AgentTrade
+
+/// The agent places orders through one DeFi app, within the same limits as a
+/// payment: everything that leaves the allowance counts against the caps.
+/// This path only routes: order outputs go to the app's order script, and the
+/// app's adapter (a withdraw-zero in the same tx) checks what the orders say.
+pub fn agent_trade(
+  own_input: Input,
+  vault: ScriptHash,
+  intent_hash: ByteArray,
+  tx: Transaction,
+) -> Bool {
+  let (d, cfg, outputs) = agent_common(own_input, vault, intent_hash, tx)
+  // Exactly one withdrawal: zero, from the adapter of an app that is both
+  // enabled on the vault and granted to this agent.
+  expect [Pair(Script(adapter), 0)] = tx.withdrawals
+  expect Some(app) = list.find(cfg.apps, fn(a) { a.adapter == adapter })
+  expect list.has(d.apps, app.name)
+  let order_address =
+    Address { payment_credential: Script(app.order_script), stake_credential: None }
+  let (orders, payments) =
+    list.partition(outputs, fn(o) { o.address == order_address })
+  expect orders != []
   list.all(payments, fn(o) { list.has(d.destinations, o.address) })
 }
 
@@ -253,5 +296,16 @@ pub fn co_signed_spend(
     is_well_formed(d),
     agent_preconditions(cfg, d, intent_hash, tx),
     threshold_met(cfg, tx.extra_signatories),
+    // Owners place DEX orders through a later path; here every output pays
+    // a key or returns to the vault.
+    list.all(
+      tx.outputs,
+      fn(o) {
+        when o.address.payment_credential is {
+          Script(h) -> h == vault
+          _ -> True
+        }
+      },
+    ),
   }
 }

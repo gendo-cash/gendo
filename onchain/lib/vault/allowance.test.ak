@@ -5,7 +5,7 @@ use cardano/address.{Address, Pointer, Script, VerificationKey}
 use cardano/assets
 use cardano/certificate.{RegisterCredential}
 use cardano/transaction.{DatumHash, InlineDatum, Input, Output, Transaction}
-use vault/allowance.{agent_spend, co_signed_spend, is_well_formed}
+use vault/allowance.{agent_spend, agent_trade, co_signed_spend, is_well_formed}
 use vault/allowance_fixtures.{
   Scenario, allowance_input, build, continuing_output, day, default,
   dest_a, dest_b, hour, intent, junk_policy, lovelace_cap, pay, payee_a,
@@ -17,7 +17,7 @@ use vault/fixtures.{
   owner_a, owner_b, owner_c, plain_output, script_address_with_stake, stranger,
   treasury_input, vault, wallet, wallet_with_stake,
 }
-use vault/types.{AllowanceDatum, ConfigDatum, max_assets, max_destinations}
+use vault/types.{AllowanceDatum, AppConfig, ConfigDatum, max_assets, max_destinations}
 
 fn run(s: Scenario) -> Bool {
   agent_spend(allowance_input(s), vault, intent, build(s))
@@ -732,4 +732,144 @@ test well_formed_rejects_too_many_apps() {
       apps: ["a", "b", "c", "d", "e"],
     },
   )
+}
+
+// ===========================================================================
+// Trades (AgentTrade): routing only. The orders' contents are the adapter's.
+
+fn trade(s: Scenario) -> Bool {
+  agent_trade(allowance_input(s), vault, intent, allowance_fixtures.build_trade(s))
+}
+
+fn trade_tx(s: Scenario, t: Transaction) -> Bool {
+  agent_trade(allowance_input(s), vault, intent, t)
+}
+
+fn order(n: Int) -> Output {
+  plain_output(allowance_fixtures.order_address(), ada(n))
+}
+
+test trade_ok() {
+  trade(allowance_fixtures.trade_scenario())
+}
+
+test trade_with_payment_ok() {
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), payments: [order(5), pay(dest_a(), ada(2))] })
+}
+
+test trade_two_orders_ok() {
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), payments: [order(5), order(5)] })
+}
+
+test trade_without_withdrawal() fail {
+  let s = allowance_fixtures.trade_scenario()
+  trade_tx(s, build(s))
+}
+
+test trade_two_withdrawals() fail {
+  let s = allowance_fixtures.trade_scenario()
+  trade_tx(
+    s,
+    Transaction {
+      ..build(s),
+      withdrawals: [Pair(Script(allowance_fixtures.adapter), 0), Pair(Script(other_script), 0)],
+    },
+  )
+}
+
+test trade_withdrawal_nonzero() fail {
+  let s = allowance_fixtures.trade_scenario()
+  trade_tx(s, Transaction { ..build(s), withdrawals: [Pair(Script(allowance_fixtures.adapter), 1)] })
+}
+
+test trade_withdrawal_from_key() fail {
+  let s = allowance_fixtures.trade_scenario()
+  trade_tx(s, Transaction { ..build(s), withdrawals: [Pair(VerificationKey(allowance_fixtures.adapter), 0)] })
+}
+
+test trade_unknown_adapter() fail {
+  let s = allowance_fixtures.trade_scenario()
+  trade_tx(s, Transaction { ..build(s), withdrawals: [Pair(Script(other_script), 0)] })
+}
+
+test trade_app_not_granted() fail {
+  let s = allowance_fixtures.trade_scenario()
+  trade(Scenario { ..s, input_datum: allowance_fixtures.base_datum(), typed: Some(allowance_fixtures.base_datum()) })
+}
+
+test trade_app_granted_under_other_name() fail {
+  let d = AllowanceDatum { ..allowance_fixtures.base_datum(), apps: ["sundae"] }
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), input_datum: d, typed: Some(d) })
+}
+
+test trade_app_not_enabled() fail {
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), cfg: cfg_2_of_3() })
+}
+
+test trade_order_with_stake_part() fail {
+  let staked =
+    Address {
+      payment_credential: Script(allowance_fixtures.order_script),
+      stake_credential: wallet_with_stake(payee_a, stake_x).stake_credential,
+    }
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), payments: [plain_output(staked, ada(7))] })
+}
+
+test trade_order_to_other_script() fail {
+  let other = Address { payment_credential: Script(other_script), stake_credential: None }
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), payments: [plain_output(other, ada(7))] })
+}
+
+test trade_order_to_other_apps_script() fail {
+  // Granted and enabled: minswap. The order goes to another enabled app's script.
+  let sundae = AppConfig { name: "sundae", adapter: other_script, order_script: payee_b, settings: Void }
+  let s = allowance_fixtures.trade_scenario()
+  let other = Address { payment_credential: Script(payee_b), stake_credential: None }
+  trade(Scenario { ..s, cfg: ConfigDatum { ..s.cfg, apps: [allowance_fixtures.minswap_app(), sundae] }, payments: [plain_output(other, ada(7))] })
+}
+
+test trade_no_order() fail {
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), payments: [pay(dest_a(), ada(2))] })
+}
+
+test trade_over_tx_cap() fail {
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), payments: [order(25)] })
+}
+
+test trade_paused() fail {
+  let s = allowance_fixtures.trade_scenario()
+  trade(Scenario { ..s, cfg: ConfigDatum { ..s.cfg, paused: True } })
+}
+
+test trade_not_signed() fail {
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), signers: [] })
+}
+
+test trade_payment_to_stranger() fail {
+  trade(Scenario { ..allowance_fixtures.trade_scenario(), payments: [order(5), pay(wallet(stranger), ada(1))] })
+}
+
+test trade_two_inputs() fail {
+  let s = allowance_fixtures.trade_scenario()
+  let t = allowance_fixtures.build_trade(s)
+  trade_tx(s, Transaction { ..t, inputs: [treasury_input(3, 10), ..t.inputs] })
+}
+
+test agent_spend_still_refuses_withdrawals() fail {
+  let s = default()
+  run_tx(s, Transaction { ..build(s), withdrawals: [Pair(Script(allowance_fixtures.adapter), 0)] })
+}
+
+test agent_spend_refuses_orders() fail {
+  // An order output on the plain payment path pays a non-destination.
+  run(Scenario { ..allowance_fixtures.trade_scenario(), payments: [order(5)] })
+}
+
+test cosign_refuses_script_output() {
+  let other = Address { payment_credential: Script(other_script), stake_credential: None }
+  !co(Scenario { ..over_limit(), payments: [plain_output(other, ada(5))] })
+}
+
+test cosign_refuses_order_output() {
+  !co(Scenario { ..over_limit(), payments: [order(5)] })
 }
