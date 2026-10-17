@@ -7,6 +7,9 @@ import type { AllowanceDatum, ConfigDatum, PlutusAddress } from "./data.js";
 export const MAX_OWNERS = 10;
 export const MAX_DESTINATIONS = 10;
 export const MAX_ASSETS = 5;
+export const MAX_APPS = 4;
+
+const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
 
 export class LimitError extends Error {
   constructor(
@@ -41,6 +44,8 @@ export function wellFormedProblems(d: AllowanceDatum): string[] {
   if (d.periodMs <= 0n) p.push("period must be > 0");
   if (d.expiresAt <= d.windowStart) p.push("expiry not after window start");
   if (d.maxFee < 0n) p.push("negative max fee");
+  if (d.apps.length > MAX_APPS) p.push("too many apps");
+  if (new Set(d.apps).size !== d.apps.length) p.push("duplicate apps");
   return p;
 }
 
@@ -52,6 +57,14 @@ export function isValidConfig(c: ConfigDatum): string[] {
   if (new Set(c.owners).size !== n) p.push("duplicate owners");
   if (c.owners.some((o) => o.length !== 56)) p.push("owner key is not 28 bytes");
   if (c.maxTxValidityMs <= 0n) p.push("max tx validity must be > 0");
+  if (c.apps.length > MAX_APPS) p.push("too many apps");
+  if (new Set(c.apps.map((a) => a.name)).size !== c.apps.length) p.push("duplicate app names");
+  for (const a of c.apps) {
+    const n = utf8Bytes(a.name);
+    if (n < 1 || n > 32) p.push(`app name "${a.name}" must be 1 to 32 bytes`);
+    if (a.adapter.length !== 56) p.push(`app ${a.name}: adapter hash is not 28 bytes`);
+    if (a.orderScript.length !== 56) p.push(`app ${a.name}: order script hash is not 28 bytes`);
+  }
   return p;
 }
 
@@ -70,7 +83,8 @@ export function configChangeProblems(current: ConfigDatum, next: ConfigDatum, si
     next.threshold === current.threshold &&
     next.maxTxValidityMs === current.maxTxValidityMs &&
     next.owners.length === current.owners.length &&
-    next.owners.every((o, i) => o === current.owners[i]);
+    next.owners.every((o, i) => o === current.owners[i]) &&
+    JSON.stringify(next.apps) === JSON.stringify(current.apps);
   if (pauseOnly && signing >= 1) return [];
   return [`needs ${current.threshold} current owners to sign (got ${signing}); one owner alone can only pause an unpaused vault`];
 }
