@@ -3,7 +3,7 @@
 // catalogue's Custom deployment: open mint policy, pool at the always-fail holder).
 import { beforeAll, describe, expect, it } from "vitest";
 import { SLOT_CONFIG_NETWORK, scriptFromNative, type Emulator, type LucidEvolution } from "@lucid-evolution/lucid";
-import { policyFromAllowance } from "../../src/node/signer/core.js";
+import { createSigner, policyFromAllowance } from "../../src/node/signer/core.js";
 import { evaluate } from "../../src/node/signer/policy.js";
 import { readAllowance, readConfig } from "../../src/core/chain.js";
 import { appFor } from "../../src/core/apps/catalogue.js";
@@ -74,6 +74,13 @@ describe("agent trades on Minswap (emulator)", () => {
     const d = evaluate(policy, { signed: [], intents: {} }, built.tx.toCBOR(), emulator.now());
     expect(d).toMatchObject({ ok: true });
     expect(d.ok && d.out.lovelace).toBe(built.orderValue.lovelace! + built.fee);
+  });
+
+  it("the full signer (intent check, dedupe, policy) signs an honest trade", async () => {
+    const al = await readAllowance(lucid, vault, unit);
+    const built = await buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 2n * ADA, aToB: true, intentId: "swap-signer", purpose: "sign" });
+    const signer = createSigner({ privateKey: w.agent.privateKey, policy: policyFromAllowance({ datum: al.datum, unit, vault, network: "Custom", slot: SLOT_CONFIG_NETWORK.Custom! }), now: () => emulator.now() });
+    await expect(signer.sign(built.tx.toCBOR())).resolves.toMatch(/^[0-9a-f]+$/);
   });
 
   it("the signer refuses a trade for an app the allowance doesn't grant", async () => {

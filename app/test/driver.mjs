@@ -45,6 +45,16 @@ export async function browser(port) {
       }
       throw new Error(`no clickable ${re}\n${(await b.text())?.slice(0, 1500)}\n${logs.slice(-5).join("\n")}`);
     },
+    /** Tick the checkbox inside the first label whose text matches. */
+    async check(re, timeout = 60_000) {
+      const end = Date.now() + timeout;
+      while (Date.now() < end) {
+        const ok = await evaluate(`(() => { const re = new RegExp(${JSON.stringify(re.source)}, ${JSON.stringify(re.flags)}); const l = [...document.querySelectorAll('label')].find((e) => re.test(e.innerText.trim())); const box = l?.querySelector('input[type=checkbox]'); if (!box) return false; if (!box.checked) box.click(); return true; })()`);
+        if (ok) return;
+        await sleep(400);
+      }
+      throw new Error(`no checkbox labelled ${re}`);
+    },
     /** Type into an input found by its id (React-safe). */
     async fill(id, value) {
       const ok = await evaluate(`(() => { const el = document.getElementById(${JSON.stringify(id)}); if (!el) return false; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);

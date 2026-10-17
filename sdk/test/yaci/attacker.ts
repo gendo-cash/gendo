@@ -27,10 +27,12 @@ export const blindEvaluator: EvaluatorAdapter = {
   name: "blind",
   async evaluate({ tx }) {
     const t = CML.Transaction.from_cbor_hex(tx);
-    const out: { ex_units: typeof BLIND_EX_UNITS; redeemer_index: number; redeemer_tag: "spend" | "mint" }[] = [];
+    const out: { ex_units: typeof BLIND_EX_UNITS; redeemer_index: number; redeemer_tag: "spend" | "mint" | "publish" | "withdraw" }[] = [];
     const reds = t.witness_set().redeemers();
+    // Ledger tags: 0 spend, 1 mint, 2 cert, 3 reward (a trade's adapter withdrawal).
+    const TAGS = ["spend", "mint", "publish", "withdraw"] as const;
     const push = (tag: number, index: bigint) =>
-      out.push({ ex_units: BLIND_EX_UNITS, redeemer_index: Number(index), redeemer_tag: tag === 0 ? "spend" : "mint" });
+      out.push({ ex_units: BLIND_EX_UNITS, redeemer_index: Number(index), redeemer_tag: TAGS[tag] ?? "spend" });
     const arr = reds?.as_arr_legacy_redeemer();
     if (arr) for (let i = 0; i < arr.len(); i++) push(arr.get(i).tag(), arr.get(i).index());
     const map = reds?.as_map_redeemer_key_to_redeemer_val();

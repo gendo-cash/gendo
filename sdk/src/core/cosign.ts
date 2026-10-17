@@ -98,7 +98,7 @@ export function describeTx(txCbor: string, opts: DescribeOptions = {}): TxSummar
     const c = Data.from(data) as { index: number; fields: unknown[] };
     vaultRedeemers.push(`${kind}:${REDEEMER_NAMES[kind]?.[c.index] ?? c.index}`);
     if (kind === "spend") vaultSpends[target!] = REDEEMER_NAMES.spend![c.index] ?? String(c.index);
-    if (kind === "spend" && (c.index === 0 || c.index === 1) && typeof c.fields?.[0] === "string" && c.fields[0].length === 64)
+    if (kind === "spend" && (c.index === 0 || c.index === 1 || c.index === 3) && typeof c.fields?.[0] === "string" && c.fields[0].length === 64)
       intentField = c.fields[0];
   };
   const reds = tx.witness_set().redeemers();

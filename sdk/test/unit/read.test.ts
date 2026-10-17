@@ -262,7 +262,7 @@ describe("swaps and treasury tokens from the chain", () => {
   const tradeTx = (consumedBy?: string) => ({
     inputs: [{ tx_hash: "b1".repeat(32), output_index: 0, amount: [lov(40_000_000), { unit: unitA, quantity: "1" }] }],
     outputs: [
-      { address: ORDER, output_index: 0, amount: [lov(9_500_000)], inline_datum: order, ...(consumedBy ? { consumed_by_tx: consumedBy } : {}) },
+      { address: ORDER, output_index: 0, amount: [lov(9_500_000)], inline_datum: order, consumed_by_tx: consumedBy ?? null },
       { address: addr, output_index: 1, amount: [lov(30_100_000), { unit: unitA, quantity: "1" }] },
     ],
   });

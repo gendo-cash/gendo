@@ -5,7 +5,7 @@ const ORDER = "addr_test1order", VAULT = "addr_test1vault", TOKEN = "7c".repeat(
 const order = { orderTx: "aa".repeat(32), orderAddress: ORDER, vaultAddress: VAULT, inUnit: "lovelace", outUnit: TOKEN, minimumReceive: 900n };
 const chain = (spender: Record<string, unknown> | null, vaultOut?: { unit: string; quantity: string }[]) => async (path: string) => {
   if (path === `/txs/${order.orderTx}/utxos`)
-    return { outputs: [{ address: "addr_test1change", output_index: 0, amount: [] }, { address: ORDER, output_index: 1, amount: [{ unit: "lovelace", quantity: "8000000" }], ...(spender ?? {}) }] };
+    return { outputs: [{ address: "addr_test1change", output_index: 0, amount: [] }, { address: ORDER, output_index: 1, amount: [{ unit: "lovelace", quantity: "8000000" }], ...(spender ?? { consumed_by_tx: null }) }] };
   if (path === "/txs/bb/utxos") return { outputs: [{ address: VAULT, output_index: 0, amount: vaultOut ?? [] }] };
   return undefined;
 };
@@ -19,6 +19,9 @@ describe("Minswap order status", () => {
   });
   it("refunded when what came back is the input, not the output", async () => {
     expect(await orderStatus(chain({ consumed_by_tx: "bb" }, [{ unit: "lovelace", quantity: "7500000" }]), order)).toEqual({ status: "refunded", tx: "bb", received: { lovelace: 7_500_000n } });
+  });
+  it("unknown when the indexer doesn't say who spent outputs", async () => {
+    expect(await orderStatus(chain({}), order)).toEqual({ status: "unknown" });
   });
   it("unknown when the chain can't say", async () => {
     expect(await orderStatus(async () => undefined, order)).toEqual({ status: "unknown" });
