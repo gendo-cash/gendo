@@ -90,3 +90,22 @@ export function addressToBech32(a: PlutusAddress, network: ReadNetwork): string 
 /** The vault's canonical address: its policy id is the script hash; no stake part. */
 export const scriptAddress = (policy: string, network: ReadNetwork) =>
   addressToBech32({ payment: { type: "Script", hash: policy }, stake: null }, network);
+
+/** A Minswap order of ours (see core/apps/minswap/data.ts), without Lucid; null for any other shape. */
+export function orderFromCbor(hex: string): { adapter: string; lpPolicy: string; lpName: string; aToB: boolean; amount: bigint; minimumReceive: bigint; maxBatcherFee: bigint; expiry: bigint; tip: bigint } | null {
+  try {
+    const [canceller, , , , , lp, step, fee, expiry] = asConstr(decodePlutusData(hex), 0, 9);
+    const [adapter] = asConstr(canceller!, 2, 1);
+    const [lpPolicy, lpName] = asConstr(lp!, 0, 2);
+    const [dir, amountOpt, min, killable] = asConstr(step!, 0, 4);
+    const [amount] = asConstr(amountOpt!, 0, 1);
+    asConstr(killable!, 1, 0);
+    const [pair] = asConstr(expiry!, 0, 1);
+    const [time, tip] = asList(pair!);
+    const d = dir as { k: string; index: number };
+    if (d.k !== "constr" || time === undefined || tip === undefined) return null;
+    return { adapter: asBytes(adapter!), lpPolicy: asBytes(lpPolicy!), lpName: asBytes(lpName!), aToB: d.index === 1, amount: asInt(amount!), minimumReceive: asInt(min!), maxBatcherFee: asInt(fee!), expiry: asInt(time), tip: asInt(tip) };
+  } catch {
+    return null;
+  }
+}

@@ -6,7 +6,9 @@ import type { ConfigDatum } from "../core/data.js";
 import type { Intent } from "../core/intent.js";
 import { utf8ToHex } from "../core/bytes.js";
 import { floorDiv, unitOf, wellFormedProblems } from "../core/limits.js";
-import { addressToBech32, allowanceFromCbor, configFromCbor, scriptAddress, type ReadNetwork } from "./decode.js";
+import { addressToBech32, allowanceFromCbor, configFromCbor, orderFromCbor, scriptAddress, type ReadNetwork } from "./decode.js";
+import { isOrderAddress, poolByLp } from "../core/apps/catalogue.js";
+import { orderStatus } from "../core/apps/minswap/status.js";
 import { decodePlutusData } from "./plutus-cbor.js";
 
 export type Get = (path: string) => Promise<unknown | undefined>;
@@ -25,12 +27,35 @@ export type AllowanceView = {
   expiresAt?: number;
   maxFee?: bigint;
 };
-export type VaultView = { policy: string; address: string; config: ConfigDatum | null; treasuryLovelace: bigint; allowances: AllowanceView[] };
+export type VaultView = {
+  policy: string;
+  address: string;
+  config: ConfigDatum | null;
+  treasuryLovelace: bigint;
+  /** Everything the treasury holds, per unit (`lovelace` included): swap proceeds land here. */
+  treasury: Record<string, bigint>;
+  allowances: AllowanceView[];
+};
+export type TradeView = {
+  app: "minswap";
+  /** The catalogue's label ("ADA ↔ NACRE"), else the LP name. */
+  pool: string;
+  lpName: string;
+  sells: string;
+  buys: string;
+  amountIn: bigint;
+  minimumReceive: bigint;
+  orderTx: string;
+  status: "pending" | "filled" | "refunded" | "unknown";
+  settledTx?: string;
+  /** What reached the vault when it settled. */
+  received?: Record<string, bigint>;
+};
 export type PaymentView = {
   txHash: string;
   time: number;
   /** From the vault redeemer on chain; "unknown" when it couldn't be read. */
-  kind: "agent" | "co-signed" | "owner" | "unknown";
+  kind: "agent" | "co-signed" | "owner" | "trade" | "unknown";
   /** Agent-written metadata: a claim, not a control. */
   purpose?: string;
   intentId?: string;
@@ -39,6 +64,8 @@ export type PaymentView = {
   allowanceDelta: bigint;
   /** Who was paid: agent and co-signed spends only (an owner tx's other outputs are the owner's own change). */
   payees: { address: string; lovelace: bigint }[];
+  /** A swap (`kind: "trade"`): what the order asks for and how it settled. */
+  trade?: TradeView;
 };
 
 type BfAmount = { unit: string; quantity: string };
@@ -100,6 +127,7 @@ export async function readVault(get: Get, policy: string, network: ReadNetwork, 
   let config: ConfigDatum | null = null;
   let hasConfig = false;
   let treasuryLovelace = 0n;
+  const treasury: Record<string, bigint> = {};
   const allowances: AllowanceView[] = [];
   for (const u of utxos) {
     const vaultUnits = u.amount.filter((a) => a.unit.startsWith(policy) && a.unit !== "lovelace");
@@ -111,19 +139,22 @@ export async function readVault(get: Get, policy: string, network: ReadNetwork, 
         config = null;
       }
     } else if (vaultUnits.length === 1 && vaultUnits[0]!.quantity === "1") allowances.push(allowanceView(u, vaultUnits[0]!.unit, network, now));
-    else if (vaultUnits.length === 0) treasuryLovelace += qty(u.amount, "lovelace");
+    else if (vaultUnits.length === 0) {
+      treasuryLovelace += qty(u.amount, "lovelace");
+      for (const a of u.amount) treasury[a.unit] = (treasury[a.unit] ?? 0n) + BigInt(a.quantity);
+    }
   }
   if (!hasConfig) return undefined;
   if (config?.paused) for (const a of allowances) if (a.status === "active") a.status = "paused";
-  return { policy, address, config, treasuryLovelace, allowances };
+  return { policy, address, config, treasuryLovelace, treasury, allowances };
 }
 
 // Blockfrost flags reference and collateral inputs, and the collateral-return output: none of
 // them is part of what the tx did to the allowance.
 type BfIn = { tx_hash: string; output_index: number; amount: BfAmount[]; reference?: boolean; collateral?: boolean };
-type BfTxUtxos = { inputs: BfIn[]; outputs: { address: string; amount: BfAmount[]; collateral?: boolean }[] };
+type BfTxUtxos = { inputs: BfIn[]; outputs: { address: string; amount: BfAmount[]; collateral?: boolean; inline_datum?: string | null }[] };
 type BfRedeemer = { tx_index: number; purpose: string; redeemer_data_hash: string };
-const KINDS = ["agent", "co-signed", "owner"] as const; // SpendRedeemer constructors 0, 1, 2
+const KINDS = ["agent", "co-signed", "owner", "trade"] as const; // SpendRedeemer constructors 0, 1, 2, 3
 
 /** The vault redeemer on the allowance input: the ledger indexes spend redeemers by sorted input. */
 async function spendKind(get: Get, txHash: string, io: BfTxUtxos, input: BfIn): Promise<PaymentView["kind"]> {
@@ -166,6 +197,7 @@ export async function allowanceHistory(get: Get, unit: string, vaultAddress: str
     ]);
     const intent = readIntent(meta);
     const after = io.outputs.find((o) => !o.collateral && o.address === vaultAddress && o.amount.some((a) => a.unit === unit));
+    const trade = kind === "trade" ? await tradeOf(get, cur, io, vaultAddress) : undefined;
     out.push({
       txHash: cur,
       time: (tx?.block_time ?? 0) * 1000,
@@ -175,11 +207,34 @@ export async function allowanceHistory(get: Get, unit: string, vaultAddress: str
       fee: BigInt(tx?.fees ?? "0"),
       allowanceDelta: (after ? qty(after.amount, "lovelace") : 0n) - qty(prev.amount, "lovelace"),
       payees:
-        kind === "agent" || kind === "co-signed"
-          ? io.outputs.filter((o) => !o.collateral && o.address !== vaultAddress).map((o) => ({ address: o.address, lovelace: qty(o.amount, "lovelace") }))
+        kind === "agent" || kind === "co-signed" || kind === "trade"
+          ? io.outputs.filter((o) => !o.collateral && o.address !== vaultAddress && !isOrderAddress(o.address)).map((o) => ({ address: o.address, lovelace: qty(o.amount, "lovelace") }))
           : [],
+      ...(trade ? { trade } : {}),
     });
     cur = prev.tx_hash;
   }
   return out;
+}
+
+/** The order a trade placed (decoded from its own output) and how it settled. */
+async function tradeOf(get: Get, txHash: string, io: BfTxUtxos, vaultAddress: string): Promise<TradeView | undefined> {
+  const out = io.outputs.find((o) => isOrderAddress(o.address) && o.inline_datum);
+  const order = out?.inline_datum ? orderFromCbor(out.inline_datum) : null;
+  if (!out || !order) return undefined;
+  const found = poolByLp(order.lpName);
+  const [sells, buys] = found ? (order.aToB ? [found.pool.assetA, found.pool.assetB] : [found.pool.assetB, found.pool.assetA]) : ["?", "?"];
+  const st = await orderStatus(get, { orderTx: txHash, orderAddress: out.address, vaultAddress, inUnit: sells, outUnit: buys, minimumReceive: order.minimumReceive });
+  return {
+    app: "minswap",
+    pool: found?.pool.label ?? order.lpName,
+    lpName: order.lpName,
+    sells,
+    buys,
+    amountIn: order.amount,
+    minimumReceive: order.minimumReceive,
+    orderTx: txHash,
+    status: st.status,
+    ...(st.status === "filled" || st.status === "refunded" ? { settledTx: st.tx, received: st.received } : {}),
+  };
 }

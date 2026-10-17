@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Constr, Data } from "@lucid-evolution/lucid";
 import { asBytes, asConstr, asInt, asList, decodePlutusData, type PData } from "../../src/read/plutus-cbor.js";
+import { orderDatumToData } from "../../src/core/apps/minswap/data.js";
 
 // The reference: Lucid's own encoder. The decoder must read exactly what the SDK writes.
 const toPlain = (d: PData): unknown =>
@@ -242,6 +243,60 @@ describe("vault state from the chain", () => {
     });
     const [row] = await allowanceHistory(get, unitA, addr, "b2".repeat(32));
     expect(row).toMatchObject({ kind: "owner", payees: [], allowanceDelta: 10_000_000n });
+  });
+});
+
+describe("swaps and treasury tokens from the chain", () => {
+  const policy = h(0x0a);
+  const addr = scriptAddress(policy, "Preprod");
+  const unitA = policy + h(0x0b);
+  const ORDER = "addr_test1wrdf2f2x8pq3wwk3yv936ksmt59rz94mm66yzge8zj9pk7s0kjph3";
+  const NACRE_LP = "e5358cee5d14b83d0a4e93f321c0c3addaf8fb5010a1127b6da6a8adc0a16fd3";
+  const NACRE = "f9f812798ef9323119314c30f1ca5dd16e9eec5c116fa2c2e3a55b160014df104e41435245";
+  const lov = (n: number) => ({ unit: "lovelace", quantity: String(n) });
+  const order = orderDatumToData({
+    adapter: h(0xad), receiver: { payment: { type: "Script", hash: policy }, stake: null }, lp: { policy: "d6aae2059baee188f74917493cf7637e679cd219bdfbbf4dcbeb1d0b", name: NACRE_LP },
+    aToB: true, amount: 5_000_000n, minimumReceive: 9_000_000n, maxBatcherFee: 2_000_000n, expiry: 1_790_003_600_000n, tip: 500_000n,
+  });
+  const tradeTx = (consumedBy?: string) => ({
+    inputs: [{ tx_hash: "b1".repeat(32), output_index: 0, amount: [lov(40_000_000), { unit: unitA, quantity: "1" }] }],
+    outputs: [
+      { address: ORDER, output_index: 0, amount: [lov(9_500_000)], inline_datum: order, ...(consumedBy ? { consumed_by_tx: consumedBy } : {}) },
+      { address: addr, output_index: 1, amount: [lov(30_100_000), { unit: unitA, quantity: "1" }] },
+    ],
+  });
+  const get = (tx: unknown, fill?: unknown): Get => async (path) => {
+    if (path === `/txs/${"b2".repeat(32)}/utxos`) return tx;
+    if (path === `/txs/${"b1".repeat(32)}/utxos`) return { inputs: [{ tx_hash: "ff".repeat(32), output_index: 0, amount: [lov(9)] }], outputs: [] };
+    if (path === `/txs/${"b2".repeat(32)}/redeemers`) return [{ tx_index: 0, purpose: "spend", redeemer_data_hash: "r3" }];
+    if (path === "/scripts/datum/r3/cbor") return { cbor: Data.to(new Constr(3, ["aa".repeat(32)])) };
+    if (path === `/txs/${"b2".repeat(32)}/metadata`) return [];
+    if (path === `/txs/${"b2".repeat(32)}`) return { block_time: 1_790_000_100, fees: "400000" };
+    if (path === `/txs/${"c9".repeat(32)}/utxos`) return fill;
+    return undefined;
+  };
+
+  it("a trade row says what the order asks for, and that it's still pending", async () => {
+    const [row] = await allowanceHistory(get(tradeTx()), unitA, addr, "b2".repeat(32));
+    expect(row).toMatchObject({ kind: "trade", payees: [], trade: { app: "minswap", pool: "ADA ↔ NACRE", amountIn: 5_000_000n, minimumReceive: 9_000_000n, sells: "lovelace", buys: NACRE, orderTx: "b2".repeat(32), status: "pending" } });
+  });
+
+  it("a filled trade says what reached the vault", async () => {
+    const fill = { inputs: [], outputs: [{ address: addr, output_index: 0, amount: [lov(2_000_000), { unit: NACRE, quantity: "9300000" }] }] };
+    const [row] = await allowanceHistory(get(tradeTx("c9".repeat(32)), fill), unitA, addr, "b2".repeat(32));
+    expect(row!.trade).toMatchObject({ status: "filled", settledTx: "c9".repeat(32), received: { lovelace: 2_000_000n, [NACRE]: 9_300_000n } });
+  });
+
+  it("the treasury lists every token it holds", async () => {
+    const cfg = configToData({ owners: [h(1)], threshold: 1n, paused: false, maxTxValidityMs: 600_000n, apps: [] });
+    const utxos = [
+      { tx_hash: "c0".repeat(32), output_index: 0, inline_datum: cfg, amount: [lov(2_000_000), { unit: policy + utf8ToHex("config"), quantity: "1" }] },
+      { tx_hash: "e0".repeat(32), output_index: 0, inline_datum: null, amount: [lov(150_000_000)] },
+      { tx_hash: "e1".repeat(32), output_index: 0, inline_datum: null, amount: [lov(2_000_000), { unit: NACRE, quantity: "9300000" }] },
+    ];
+    const v = await readVault(async (path) => (path.startsWith(`/addresses/${addr}/utxos`) && path.includes("page=1") ? utxos : undefined), policy, "Preprod", 1_790_000_000_000);
+    expect(v!.treasuryLovelace).toBe(152_000_000n);
+    expect(v!.treasury).toEqual({ lovelace: 152_000_000n, [NACRE]: 9_300_000n });
   });
 });
 

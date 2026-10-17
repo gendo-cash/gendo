@@ -88,3 +88,16 @@ export function appFor(name: string, network: Network): { app: CatalogueApp; net
   const n = app?.networks[network as "Preprod" | "Custom"];
   return app && n ? { app, network: n } : undefined;
 }
+
+/** A catalogue pool by LP asset name, on whichever network lists it (labels for reading history). */
+export function poolByLp(lpName: string): { app: CatalogueApp; network: CatalogueNetwork; pool: CatalogueNetwork["pools"][number] } | undefined {
+  for (const app of catalogue())
+    for (const network of Object.values(app.networks)) {
+      const pool = network?.pools.find((p) => p.lpName === lpName);
+      if (pool && network) return { app, network, pool };
+    }
+  return undefined;
+}
+
+/** Whether `address` is where some catalogue app's orders are paid. */
+export const isOrderAddress = (address: string) => catalogue().some((a) => Object.values(a.networks).some((n) => n?.orderAddress === address));
