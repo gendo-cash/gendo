@@ -14,7 +14,7 @@ import { LimitError } from "../../limits.js";
 import { appFor } from "../catalogue.js";
 import { minswapAdapter } from "./adapter.js";
 import { orderDatumToData, poolDatumFromData, type MinswapOrder, type MinswapPool } from "./data.js";
-import { amountOut, minimumFor } from "./quote.js";
+import { amountOut, lpNameOf, minimumFor } from "./quote.js";
 import { minswapSettings, tradeProblems } from "./rules.js";
 
 /** What Minswap's batchers expect to hold back for the order output, returned with the proceeds. */
@@ -40,9 +40,18 @@ export async function findPool(req: Pick<TradeRequest, "lucid">, lpName: string)
   const found = appFor("minswap", req.lucid.config().network!);
   if (!found) throw new Error("Minswap isn't deployed on this network");
   const { lpPolicy } = found.network.deployment;
-  const utxo = (await req.lucid.utxosAtWithUnit(found.network.poolAddress, lpPolicy + lpName)).find((u) => u.assets[lpPolicy + POOL_AUTH] === 1n && u.datum);
-  if (!utxo) throw new LimitError("APP", "that pool doesn't exist on Minswap");
-  return { utxo, pool: poolDatumFromData(utxo.datum!) };
+  // Holding the pool token and the LP isn't enough: another pool can hold this LP as a reserve.
+  // The genuine pool's own two assets derive the LP name (as the adapter checks).
+  for (const utxo of await req.lucid.utxosAtWithUnit(found.network.poolAddress, lpPolicy + lpName)) {
+    if (utxo.assets[lpPolicy + POOL_AUTH] !== 1n || !utxo.datum) continue;
+    try {
+      const pool = poolDatumFromData(utxo.datum);
+      if (lpNameOf(pool) === lpName) return { utxo, pool };
+    } catch {
+      // not a pool datum: not our pool
+    }
+  }
+  throw new LimitError("APP", "that pool doesn't exist on Minswap");
 }
 
 export async function buildAgentTrade(req: TradeRequest): Promise<BuiltTrade> {

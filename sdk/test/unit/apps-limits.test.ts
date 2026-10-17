@@ -4,10 +4,10 @@ import { tradeProblems } from "../../src/core/apps/minswap/rules.js";
 import type { AllowanceDatum, ConfigDatum } from "../../src/core/data.js";
 import type { MinswapOrder, MinswapPool, MinswapSettings } from "../../src/core/apps/minswap/data.js";
 import { settingsToData } from "../../src/core/apps/minswap/data.js";
-import { amountOut, minimumFor } from "../../src/core/apps/minswap/quote.js";
+import { amountOut, lpNameOf, minimumFor } from "../../src/core/apps/minswap/quote.js";
 
 const h = (b: string) => b.repeat(28);
-const settings: MinswapSettings = { pools: ["4c51", "4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 3_600_000n, maxCancelTip: 500_000n };
+const settings: MinswapSettings = { pools: ["4c51", "885203bb4bf4466e72cb2e57d7f64b620e199d4e4c3dc0edebe4201936305605"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 3_600_000n, maxCancelTip: 500_000n };
 const app = (over: Partial<ConfigDatum["apps"][0]> = {}) => ({ name: "minswap", adapter: h("ad"), orderScript: h("0d"), settings: settingsToData(settings), ...over });
 const cfg: ConfigDatum = { owners: [h("a1"), h("b2"), h("c3")], threshold: 2n, paused: false, maxTxValidityMs: 3_600_000n, apps: [app()] };
 const al: AllowanceDatum = {
@@ -44,7 +44,7 @@ describe("trade rules mirror the adapter", () => {
   const upper = 1_000_000n;
   const fair = amountOut(pool.reserveA, pool.reserveB, 5_000_000n, 30n);
   const order: MinswapOrder = {
-    adapter: h("ad"), receiver: vault, lp: { policy: h("d6"), name: "4c50" }, aToB: true, amount: 5_000_000n,
+    adapter: h("ad"), receiver: vault, lp: { policy: h("d6"), name: lpNameOf(pool) }, aToB: true, amount: 5_000_000n,
     minimumReceive: minimumFor(fair, 300n), maxBatcherFee: 1_000_000n, expiry: upper + 3_600_000n, tip: 0n,
   };
   const base = { config: cfg, allowance: al, adapter: h("ad"), lpPolicy: h("d6"), vault, upper, order, pool, orderValue: { lovelace: 8_000_000n } };
@@ -63,5 +63,6 @@ describe("trade rules mirror the adapter", () => {
     ["tip over", { order: { ...order, tip: 500_001n } }],
     ["below the floor", { order: { ...order, minimumReceive: minimumFor(fair, 300n) - 1n } }],
     ["extra token", { orderValue: { lovelace: 8_000_000n, [h("7c") + "4a554e4b"]: 1n } }],
+    ["pool data from another pool (its assets don't derive the order's LP name)", { pool: { ...pool, assetB: { policy: h("d6"), name: "4c50" } } }],
   ])("refuses: %s", (_name, over) => expect(problems(over as Partial<typeof base>)).not.toEqual([]));
 });

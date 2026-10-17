@@ -133,3 +133,4 @@ lib/apps/minswap/place.ak	assets.quantity_of\(i.output.value, dep.lp_policy, poo
 lib/apps/minswap/place.ak	assets.quantity_of\(i.output.value, dep.lp_policy, lp\) > 0,	True,
 lib/apps/minswap/place.ak	list.length\(s.pools\) <= max_pools,	True,
 validators/apps/minswap.ak	      _ -> False	      _ -> True
+lib/apps/minswap/place.ak	          if lp_name_of\(p\) == lp \{	          if True {

@@ -26,6 +26,15 @@ describe("detailOf: apps", () => {
     expect(d.rows).toContainEqual({ k: "Minswap max slippage", now: "—", next: "3%", changed: true });
     expect(d.rows).toContainEqual({ k: "Minswap order lifetime", now: "—", next: "24 h", changed: true });
   });
+  it("a different adapter or order script shows as rows, with a warning when it isn't gendo's", () => {
+    const ctxN = { ...ctx, appScripts: { minswap: { adapter: h(0xad), orderScript: h(0x0d) } } };
+    const swapped = { ...app, adapter: h(0xee) };
+    const d = detailOf({ ...base, changes: [{ kind: "config", before: { ...c, apps: [app] }, after: { ...c, apps: [swapped] } }] }, ctxN);
+    expect(d.rows).toContainEqual({ k: "Minswap adapter", now: h(0xad), next: h(0xee), changed: true });
+    expect(d.warnings.join(" ")).toMatch(/Minswap adapter isn't the one gendo's catalogue lists/);
+    const ok = detailOf({ ...base, changes: [{ kind: "config", before: c, after: { ...c, apps: [app] } }] }, ctxN);
+    expect(ok.warnings.join(" ")).not.toMatch(/catalogue/);
+  });
   it("disabling it says so", () => {
     expect(detailOf({ ...base, changes: [{ kind: "config", before: { ...c, apps: [app] }, after: c }] }, ctx).title).toBe("Disable Minswap");
   });

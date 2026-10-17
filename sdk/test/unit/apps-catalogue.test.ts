@@ -27,7 +27,7 @@ describe("apps catalogue", () => {
     expect(n.poolAddress).toBe(refHolderAddress("Custom"));
     expect(n.deployment.poolScript).toBe(payHash(refHolderAddress("Custom")));
     expect(n.deployment.orderScript).toBe(appFor("minswap", "Preprod")!.network.deployment.orderScript);
-    expect(n.pools).toEqual([{ lpName: "4c50", label: "ADA ↔ TEST", assetA: "lovelace", assetB: n.deployment.lpPolicy + "54455354" }]);
+    expect(n.pools).toEqual([{ lpName: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", label: "ADA ↔ TEST", assetA: "lovelace", assetB: n.deployment.lpPolicy + "54455354" }]);
   });
   it("settings have help text and never a default value", () => {
     const fields = appFor("minswap", "Preprod")!.app.settings;

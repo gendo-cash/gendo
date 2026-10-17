@@ -1,5 +1,5 @@
 // Devnet stand-in for Minswap (the catalogue's Custom deployment), idempotent:
-//  - a fixture pool (MSP + LP "4c50" + TEST under the open policy) at the always-fail holder;
+//  - a fixture pool (MSP + LP "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f" + TEST under the open policy) at the always-fail holder;
 //  - the Minswap adapter's stake credential, registered (withdraw-zero needs it);
 //  - Minswap's expired-order-cancel stake credential, registered (so expired orders refund).
 // Usage: VAULT_NETWORK=Custom npx tsx sdk/scripts/devnet-apps.ts
@@ -40,16 +40,16 @@ const lucid = await connect(cfg);
 const sk = await funded(lucid);
 lucid.selectWallet.fromPrivateKey(sk);
 
-const pools = (await lucid.utxosAtWithUnit(dep.poolAddress, P + "4c50")).filter((u) => u.assets[P + "4d5350"] === 1n);
+const pools = (await lucid.utxosAtWithUnit(dep.poolAddress, P + "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f")).filter((u) => u.assets[P + "4d5350"] === 1n);
 if (pools.length) console.log("fixture pool: already there");
 else {
   const datum = poolDatumToData({ assetA: { policy: "", name: "" }, assetB: { policy: P, name: "54455354" }, totalLiquidity: 1_000_000n, reserveA: 1_000_000_000_000n, reserveB: 2_000_000_000_000n, feeA: 30n, feeB: 30n, batchingStakeScript: "fb".repeat(28) });
   const h = await submit(lucid, sk, () =>
     lucid
       .newTx()
-      .mintAssets({ [P + "4d5350"]: 1n, [P + "4c50"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
+      .mintAssets({ [P + "4d5350"]: 1n, [P + "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
       .attach.MintingPolicy(scriptFromNative({ type: "all", scripts: [] }))
-      .pay.ToContract(dep.poolAddress, { kind: "inline", value: datum }, { lovelace: 5_000_000n, [P + "4d5350"]: 1n, [P + "4c50"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
+      .pay.ToContract(dep.poolAddress, { kind: "inline", value: datum }, { lovelace: 5_000_000n, [P + "4d5350"]: 1n, [P + "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
       .complete() as never,
   );
   console.log(`fixture pool: placed (${h})`);

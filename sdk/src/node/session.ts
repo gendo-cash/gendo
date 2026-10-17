@@ -269,10 +269,16 @@ export async function swap(s: AgentSession, p: SwapRequest) {
     if (!found) throw Object.assign(new Error(`Minswap isn't available on ${network}`), { code: "APP" });
     const pool = found.network.pools.find((x) => x.label === p.pool || x.lpName === p.pool);
     if (!pool) throw Object.assign(new Error(`unknown pool ${p.pool}; use one from get_budget`), { code: "APP" });
-    // Selling ADA (amount_ada) or the pool's other asset (asset).
+    // Selling ADA (amount_ada) or one of the pool's two assets (asset); anything else is refused, never guessed.
     const sellingAda = !p.asset;
-    const amountIn = sellingAda ? BigInt(Math.round((p.amount_ada ?? 0) * 1e6)) : BigInt(p.asset!.quantity);
-    const aToB = sellingAda ? pool.assetA === "lovelace" : pool.assetA === p.asset!.unit;
+    const unitIn = sellingAda ? "lovelace" : p.asset!.unit;
+    if (unitIn !== pool.assetA && unitIn !== pool.assetB)
+      throw Object.assign(new Error(`${sellingAda ? "ADA" : unitIn} isn't in that pool (${pool.label})`), { code: "APP" });
+    if (!sellingAda && !Number.isSafeInteger(p.asset!.quantity))
+      throw Object.assign(new Error("a token quantity must be a whole number (raw units)"), { code: "APP" });
+    if (sellingAda && !(p.amount_ada! > 0)) throw Object.assign(new Error("amount_ada must be positive"), { code: "APP" });
+    const amountIn = sellingAda ? BigInt(Math.round(p.amount_ada! * 1e6)) : BigInt(p.asset!.quantity);
+    const aToB = unitIn === pool.assetA;
     const al = await readAllowance(s.lucid, s.vault, s.unit);
     const w = await agentWallet(s, al.datum.agent);
     const [adapterRef] = found.network.adapterRef ? await s.lucid.utxosByOutRef([found.network.adapterRef]) : [];

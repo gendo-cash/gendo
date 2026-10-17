@@ -1,5 +1,7 @@
 // The one review step every signature goes through. A proposal is built, explained from the tx
 // and (on preprod) hash-checked chain data, and shown here; only then does the wallet open.
+import { appFor } from "../../../sdk/src/core/apps/catalogue.ts";
+import { minswapAdapter } from "../../../sdk/src/core/apps/minswap/adapter.ts";
 import { useState } from "react";
 import { CML, credentialToAddress, explainTx, fromPlutusAddress, refHolderAddress, type AllowanceDatum, type Vault } from "../../../sdk/src/core/index.ts";
 import { inputsOf } from "./chain.ts";
@@ -21,6 +23,7 @@ export function ctxFor(o: Owner, vault: Vault, labels: Record<string, string>, r
   return {
     viewer: o.me.pkh, vaultAddress: vault.address, refHolder: refHolderAddress(o.net), agentAddress: (pkh: string) => credentialToAddress(o.net, { type: "Key", hash: pkh }), labels, isMine, short, recipe: recipe ?? null,
     payeesOf: (d: AllowanceDatum) => d.destinations.map((a) => fromPlutusAddress(o.net, a)),
+    appScripts: appFor("minswap", o.net) ? { minswap: { adapter: minswapAdapter(o.net).hash, orderScript: appFor("minswap", o.net)!.network.deployment.orderScript } } : {},
   };
 }
 

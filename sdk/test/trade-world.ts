@@ -25,12 +25,12 @@ export async function tradeWorld(settings: MinswapSettings, extraStake: string[]
   const P = DEVNET.deployment.lpPolicy;
   const pool = await lucid
     .newTx()
-    .mintAssets({ [P + "4d5350"]: 1n, [P + "4c50"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
+    .mintAssets({ [P + "4d5350"]: 1n, [P + "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
     .attach.MintingPolicy(scriptFromNative({ type: "all", scripts: [] }))
     .pay.ToContract(
       DEVNET.poolAddress,
       { kind: "inline", value: poolDatumToData({ assetA: { policy: "", name: "" }, assetB: { policy: P, name: "54455354" }, totalLiquidity: 1_000_000n, reserveA: RESERVE_A, reserveB: RESERVE_B, feeA: 30n, feeB: 30n, batchingStakeScript: "fb".repeat(28) }) },
-      { lovelace: 5n * ADA, [P + "4d5350"]: 1n, [P + "4c50"]: 1_000_000n, [P + "54455354"]: 1_000_000n },
+      { lovelace: 5n * ADA, [P + "4d5350"]: 1n, [P + "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"]: 1_000_000n, [P + "54455354"]: 1_000_000n },
     )
     .complete();
   await signAndSubmit(lucid, emulator, pool, [w.a]);

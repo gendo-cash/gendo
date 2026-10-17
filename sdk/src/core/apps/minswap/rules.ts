@@ -3,7 +3,7 @@
 // lets the SDK, the signer and the relay refuse a doomed trade with a readable reason.
 import type { AllowanceDatum, ConfigDatum, PlutusAddress } from "../../data.js";
 import { settingsFromData, type MinswapOrder, type MinswapPool, type MinswapSettings } from "./data.js";
-import { amountOut, floorOk } from "./quote.js";
+import { amountOut, floorOk, lpNameOf } from "./quote.js";
 
 export const MAX_POOLS = 8;
 export const MAX_ORDERS = 3;
@@ -49,6 +49,8 @@ export function tradeProblems(t: {
   if (!sameAddress(o.receiver, t.vault)) p.push("the order doesn't pay the vault");
   if (o.amount <= 0n) p.push("the swap amount must be positive");
   if (o.lp.policy !== t.lpPolicy || !s.pools.includes(o.lp.name)) p.push("that pool isn't allowed");
+  // The floor is read from this pool: its own assets must derive the order's LP name (else it's another pool).
+  if (lpNameOf(t.pool) !== o.lp.name) p.push("the pool data doesn't belong to the order's pool");
   if (o.maxBatcherFee < 0n || o.maxBatcherFee > s.maxBatcherFee) p.push(`batcher fee over the vault's ${s.maxBatcherFee} lovelace`);
   if (o.expiry > t.upper + s.maxOrderTtlMs) p.push("the order lives longer than the vault allows");
   if (o.tip < 0n || o.tip > s.maxCancelTip) p.push("the cancel tip is over the vault's limit");

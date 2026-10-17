@@ -9,7 +9,7 @@ import { readAllowance, readConfig } from "../../src/core/chain.js";
 import { appFor } from "../../src/core/apps/catalogue.js";
 import { minswapAdapter, minswapAppConfig } from "../../src/core/apps/minswap/adapter.js";
 import { orderDatumFromData, poolDatumToData, type MinswapSettings } from "../../src/core/apps/minswap/data.js";
-import { amountOut, minimumFor } from "../../src/core/apps/minswap/quote.js";
+import { amountOut, lpNameOf, minimumFor } from "../../src/core/apps/minswap/quote.js";
 import { buildAgentTrade, ORDER_DEPOSIT } from "../../src/core/apps/minswap/trade.js";
 import { LimitError } from "../../src/core/limits.js";
 import * as owner from "../../src/core/owner.js";
@@ -24,7 +24,7 @@ let vault: Vault;
 let unit: string;
 const HOUR = 3_600_000n;
 const dep = appFor("minswap", "Custom")!.network;
-const settings: MinswapSettings = { pools: ["4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: HOUR, maxCancelTip: 500_000n };
+const settings: MinswapSettings = { pools: ["860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: HOUR, maxCancelTip: 500_000n };
 const RA = RESERVE_A, RB = RESERVE_B;
 
 const asOwner = () => lucid.selectWallet.fromPrivateKey(w.a.privateKey);
@@ -38,7 +38,7 @@ beforeAll(async () => {
 describe("agent trades on Minswap (emulator)", () => {
   it("an honest swap builds through the vault and the adapter, and lands", async () => {
     const before = await readAllowance(lucid, vault, unit);
-    const built = await buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 5n * ADA, aToB: true, intentId: "swap-1", purpose: "test swap" });
+    const built = await buildAgentTrade({ ...(await ctx()), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 5n * ADA, aToB: true, intentId: "swap-1", purpose: "test swap" });
     await signAndSubmit(lucid, emulator, built.tx, [w.agent]);
     const [o] = (await lucid.utxosAt(dep.orderAddress)).filter((u) => u.datum);
     const order = orderDatumFromData(o!.datum!)!;
@@ -53,14 +53,31 @@ describe("agent trades on Minswap (emulator)", () => {
   });
 
   it("the adapter itself refuses an order one unit under the price floor (local script evaluation)", async () => {
-    const err = await buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 1n * ADA, aToB: true, intentId: "swap-floor", purpose: "x", skipPreflight: true, tamper: (o) => ({ ...o, minimumReceive: o.minimumReceive - 1n }) }).then(() => undefined, (e: Error) => e);
+    const err = await buildAgentTrade({ ...(await ctx()), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 1n * ADA, aToB: true, intentId: "swap-floor", purpose: "x", skipPreflight: true, tamper: (o) => ({ ...o, minimumReceive: o.minimumReceive - 1n }) }).then(() => undefined, (e: Error) => e);
     // The withdraw redeemer (the adapter) is what fails, not the vault's spend.
     expect(String(err?.message ?? err)).toMatch(/failed script execution Withdraw\[0\]/);
   });
 
+  it("a look-alike pool holding the LP as a reserve doesn't fool the quote", async () => {
+    // Anyone can create a Minswap pool ADA / LP_X: it holds the pool token and LP_X, with any reserves.
+    asOwner();
+    const P = dep.deployment.lpPolicy;
+    const lpX = dep.pools[0]!.lpName;
+    const lpY = lpNameOf({ assetA: { policy: "", name: "" }, assetB: { policy: P, name: lpX } });
+    const fake = await lucid
+      .newTx()
+      .mintAssets({ [P + "4d5350"]: 1n, [P + lpY]: 1_000n, [P + lpX]: 1n })
+      .attach.MintingPolicy(scriptFromNative({ type: "all", scripts: [] }))
+      .pay.ToContract(dep.poolAddress, { kind: "inline", value: poolDatumToData({ assetA: { policy: "", name: "" }, assetB: { policy: P, name: lpX }, totalLiquidity: 1n, reserveA: 10n ** 15n, reserveB: 1n, feeA: 30n, feeB: 30n, batchingStakeScript: "fb".repeat(28) }) }, { lovelace: 3n * ADA, [P + "4d5350"]: 1n, [P + lpY]: 1_000n, [P + lpX]: 1n })
+      .complete();
+    await signAndSubmit(lucid, emulator, fake, [w.a]);
+    const built = await buildAgentTrade({ ...(await ctx()), pool: lpX, amountIn: 1n * ADA, aToB: true, intentId: "swap-lookalike", purpose: "x" });
+    expect(built.order.minimumReceive).toBe(minimumFor(amountOut(RA, RB, 1n * ADA, 30n), 300n));
+  });
+
   it("the budget counts the deposit and fees: an amount that fits alone but not with them is refused before building", async () => {
     // tx cap 20 ADA: 17 ADA + 2 fee + 2 deposit + 0.5 tip > 20.
-    await expect(buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 17n * ADA, aToB: true, intentId: "swap-big", purpose: "too big" })).rejects.toMatchObject({ code: "TX_CAP" });
+    await expect(buildAgentTrade({ ...(await ctx()), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 17n * ADA, aToB: true, intentId: "swap-big", purpose: "too big" })).rejects.toMatchObject({ code: "TX_CAP" });
   });
 
   it("a pool the vault doesn't allow is refused", async () => {
@@ -69,7 +86,7 @@ describe("agent trades on Minswap (emulator)", () => {
 
   it("the signer signs an honest trade and counts the whole order against its daily budget", async () => {
     const al = await readAllowance(lucid, vault, unit);
-    const built = await buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 2n * ADA, aToB: true, intentId: "swap-sign", purpose: "sign" });
+    const built = await buildAgentTrade({ ...(await ctx()), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 2n * ADA, aToB: true, intentId: "swap-sign", purpose: "sign" });
     const policy = policyFromAllowance({ datum: al.datum, unit, vault, network: "Custom", slot: SLOT_CONFIG_NETWORK.Custom! });
     const d = evaluate(policy, { signed: [], intents: {} }, built.tx.toCBOR(), emulator.now());
     expect(d).toMatchObject({ ok: true });
@@ -78,14 +95,14 @@ describe("agent trades on Minswap (emulator)", () => {
 
   it("the full signer (intent check, dedupe, policy) signs an honest trade", async () => {
     const al = await readAllowance(lucid, vault, unit);
-    const built = await buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 2n * ADA, aToB: true, intentId: "swap-signer", purpose: "sign" });
+    const built = await buildAgentTrade({ ...(await ctx()), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 2n * ADA, aToB: true, intentId: "swap-signer", purpose: "sign" });
     const signer = createSigner({ privateKey: w.agent.privateKey, policy: policyFromAllowance({ datum: al.datum, unit, vault, network: "Custom", slot: SLOT_CONFIG_NETWORK.Custom! }), now: () => emulator.now() });
     await expect(signer.sign(built.tx.toCBOR())).resolves.toMatch(/^[0-9a-f]+$/);
   });
 
   it("the signer refuses a trade for an app the allowance doesn't grant", async () => {
     const al = await readAllowance(lucid, vault, unit);
-    const built = await buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 2n * ADA, aToB: true, intentId: "swap-sign-2", purpose: "sign" });
+    const built = await buildAgentTrade({ ...(await ctx()), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 2n * ADA, aToB: true, intentId: "swap-sign-2", purpose: "sign" });
     const policy = policyFromAllowance({ datum: { ...al.datum, apps: [] }, unit, vault, network: "Custom", slot: SLOT_CONFIG_NETWORK.Custom! });
     expect(evaluate(policy, { signed: [], intents: {} }, built.tx.toCBOR(), emulator.now())).toMatchObject({ ok: false, reason: expect.stringMatching(/withdraw|app/i) });
   });
@@ -93,6 +110,6 @@ describe("agent trades on Minswap (emulator)", () => {
   it("after the owners disable Minswap, the agent's trade is refused with a readable reason", async () => {
     asOwner();
     await signAndSubmit(lucid, emulator, await owner.disableApp(lucid, vault, await readConfig(lucid, vault), "minswap", [w.a.pkh, w.b.pkh]), [w.a, w.b]);
-    await expect(buildAgentTrade({ ...(await ctx()), pool: "4c50", amountIn: 1n * ADA, aToB: true, intentId: "swap-2", purpose: "x" })).rejects.toThrow(/isn't enabled/);
+    await expect(buildAgentTrade({ ...(await ctx()), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 1n * ADA, aToB: true, intentId: "swap-2", purpose: "x" })).rejects.toThrow(/isn't enabled/);
   });
 });

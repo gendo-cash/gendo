@@ -13,7 +13,7 @@ let w: Awaited<ReturnType<typeof tradeWorld>>;
 let s: AgentSession;
 
 beforeAll(async () => {
-  w = await tradeWorld({ pools: ["4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 3_600_000n, maxCancelTip: 500_000n });
+  w = await tradeWorld({ pools: ["860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 3_600_000n, maxCancelTip: 500_000n });
   const q: ChainQuery = {
     txExists: async () => false,
     spenderOf: async () => undefined,
@@ -45,5 +45,15 @@ describe("the agent's swap tools (emulator)", () => {
   it("over the per-payment limit is blocked with the next step", async () => {
     const r = await swap(s, { app: "minswap", pool: "ADA ↔ TEST", amount_ada: 19, intent_id: "S-3", purpose: "test" });
     expect(r).toMatchObject({ status: "blocked", code: "TX_CAP", next_step: expect.any(String) });
+  });
+
+  it("selling an asset that isn't in the pool is refused, not swapped for the pool's other asset", async () => {
+    const r = await swap(s, { app: "minswap", pool: "ADA ↔ TEST", asset: { unit: "ab".repeat(28) + "4e4f50", quantity: 100 }, intent_id: "S-4", purpose: "x" });
+    expect(r).toMatchObject({ status: "blocked", code: "APP", reason: expect.stringMatching(/isn't in that pool/) });
+  });
+
+  it("a fractional token quantity is refused with a reason", async () => {
+    const r = await swap(s, { app: "minswap", pool: "ADA ↔ TEST", asset: { unit: w.vault.hash.slice(0, 0) + "d441227553a0f1a965fee7d60a0f724b368dd1bddbc208730fccebcf54455354", quantity: 1.5 }, intent_id: "S-5", purpose: "x" });
+    expect(r).toMatchObject({ status: "blocked", code: "APP", reason: expect.stringMatching(/whole number/) });
   });
 });

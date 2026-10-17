@@ -23,6 +23,8 @@ export type Ctx = {
   /** For titles only; review rows always show addresses and keys in full. */
   short: (s: string) => string;
   recipe?: { intentId?: string; purpose?: string; reason?: string } | null;
+  /** The catalogue's adapter and order script per app on this network: anything else gets a warning. */
+  appScripts?: Record<string, { adapter: string; orderScript: string }>;
 };
 
 const lov = (d: AllowanceDatum) => d.caps.find((c) => c.policy === "" && c.name === "");
@@ -64,11 +66,14 @@ const appTitle = (name: string) => (name === "minswap" ? "Minswap" : name);
 const hours = (ms: bigint) => (ms % 3_600_000n === 0n ? `${ms / 3_600_000n} h` : `${Number(ms) / 60_000} min`);
 
 /** An app's settings as rows ("Minswap max slippage" …), decoded from the config: never from server text. */
-function appFields(app: { name: string; settings: string } | undefined): Record<string, string> {
+function appFields(app: { name: string; settings: string; adapter: string; orderScript: string } | undefined): Record<string, string> {
   if (!app) return {};
+  // The scripts first: an adapter swap changes what the chain checks, so it must never hide behind unchanged settings.
+  const scripts = { adapter: app.adapter, "order script": app.orderScript };
   try {
     const s = settingsFromData(app.settings);
     return {
+      ...scripts,
       pools: s.pools.map((lp) => poolByLp(lp)?.pool.label ?? lp).join(", "),
       "max slippage": `${Number(s.maxSlippageBps) / 100}%`,
       "max batcher fee": `${ada(s.maxBatcherFee)} ADA`,
@@ -76,7 +81,7 @@ function appFields(app: { name: string; settings: string } | undefined): Record<
       "cancel tip": `${ada(s.maxCancelTip)} ADA`,
     };
   } catch {
-    return { settings: "unreadable (every order would be refused)" };
+    return { ...scripts, settings: "unreadable (every order would be refused)" };
   }
 }
 
@@ -128,7 +133,20 @@ export function detailOf(e: Explanation, ctx: Ctx): Detail {
   if (intoVault > 0n) money.push({ label: "Into the vault", value: `${ada(intoVault)} ADA` });
   const mine = e.flows.filter((f) => ctx.isMine(f.address)).reduce((n, f) => n - (f.delta.lovelace ?? 0n), 0n);
   if (mine > 0n) money.push({ label: "From your wallet", value: `${ada(mine)} ADA` });
-  const out = (d: Omit<Detail, "money" | "warnings">): Detail => ({ ...d, money, warnings: e.warnings });
+  // An app whose adapter or order script isn't the catalogue's: the chain would trust whatever that script allows.
+  const appWarnings = e.changes.flatMap((c) =>
+    c.kind === "config" && c.after
+      ? c.after.apps.flatMap((a) => {
+          const want = ctx.appScripts?.[a.name];
+          if (!want) return [];
+          const w: string[] = [];
+          if (a.adapter !== want.adapter) w.push(`the ${appTitle(a.name)} adapter isn't the one gendo's catalogue lists for this network: the chain would trust whatever that script allows`);
+          if (a.orderScript !== want.orderScript) w.push(`the ${appTitle(a.name)} order script isn't the one gendo's catalogue lists for this network`);
+          return w;
+        })
+      : [],
+  );
+  const out = (d: Omit<Detail, "money" | "warnings">): Detail => ({ ...d, money, warnings: [...e.warnings, ...appWarnings] });
 
   const spend = e.changes.find((c) => c.kind === "spend");
   if (spend && spend.kind === "spend") {

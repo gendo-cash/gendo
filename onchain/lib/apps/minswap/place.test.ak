@@ -4,6 +4,7 @@ use apps/minswap/fixtures.{
   upper, with_order, with_settings,
 } as mfx
 use apps/minswap/place.{place}
+use apps/minswap/place
 use apps/minswap/types.{
   Asset, DAOSpecificAmount, Deposit, Donation, EODDatumHash, EODInlineDatum,
   MinswapSettings, OAMSignature, OAMSpendScript, OAMWithdrawScript, OrderDatum,
@@ -352,4 +353,48 @@ test two_inputs_allowance_first() fail {
   let c = case()
   let t = mfx.build(c)
   place(adapter, dep(), Transaction { ..t, inputs: [mfx.allowance_input(["minswap"]), treasury_input(3, 10)] })
+}
+
+test fake_pool_holding_the_order_lp_as_a_reserve() fail {
+  // A real Minswap pool Y = ADA / LP_X holds the pool token and LP_X (as a
+  // reserve), but its reserves say nothing about pool X: here they make the
+  // fair price about zero, so a minimum of 1 would pass a floor read from Y.
+  let lp_y = #"bd40e5238c6d2482ff52bb3f9c1a90d3524785484a1f4cdae0680f6ba453b9ee"
+  let y =
+    ms.PoolDatum {
+      ..pool_datum(),
+      asset_b: Asset { policy_id: lp_policy, asset_name: lp_name },
+      reserve_a: 1_000_000_000_000_000,
+      reserve_b: 1,
+    }
+  let value =
+    ada(2)
+      |> assets.merge(assets.from_asset(lp_policy, pool_auth_name, 1))
+      |> assets.merge(assets.from_asset(lp_policy, lp_y, 1_000_000))
+      |> assets.merge(assets.from_asset(lp_policy, lp_name, 1))
+  let pool_y = Input { output_reference: fixtures.out_ref(501), output: output(mfx.pool_address(), value, y) }
+  run(Case { ..with_order(fn(d) { OrderDatum { ..d, step: step(1) } }), pools: [pool_y] })
+}
+
+test genuine_pool_found_after_a_look_alike() {
+  let lp_y = #"bd40e5238c6d2482ff52bb3f9c1a90d3524785484a1f4cdae0680f6ba453b9ee"
+  let y = ms.PoolDatum { ..pool_datum(), asset_b: Asset { policy_id: lp_policy, asset_name: lp_name }, reserve_a: 1_000_000_000_000_000, reserve_b: 1 }
+  let value =
+    ada(2)
+      |> assets.merge(assets.from_asset(lp_policy, pool_auth_name, 1))
+      |> assets.merge(assets.from_asset(lp_policy, lp_y, 1_000_000))
+      |> assets.merge(assets.from_asset(lp_policy, lp_name, 1))
+  let pool_y = Input { output_reference: fixtures.out_ref(501), output: output(mfx.pool_address(), value, y) }
+  run(Case { ..case(), pools: [pool_y, pool_input(lp_name, pool_datum())] })
+}
+
+test lp_name_matches_minswaps_vector() {
+  // minswap-dex-v2@c3293ad utils.ak test_compute_lp_asset_name
+  let p =
+    ms.PoolDatum {
+      ..pool_datum(),
+      asset_a: Asset { policy_id: #"", asset_name: #"" },
+      asset_b: Asset { policy_id: #"29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6", asset_name: #"4d494e" },
+    }
+  place.lp_name_of(p) == #"82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
 }

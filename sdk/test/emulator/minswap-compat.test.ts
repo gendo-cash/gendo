@@ -22,7 +22,7 @@ let unit: string;
 const HOUR = 3_600_000n;
 const dep = appFor("minswap", "Custom")!.network;
 const P = dep.deployment.lpPolicy;
-const settings: MinswapSettings = { pools: ["4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 600_000n, maxCancelTip: 500_000n };
+const settings: MinswapSettings = { pools: ["860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 600_000n, maxCancelTip: 500_000n };
 const orderScript = scripts.orderScript as Script;
 const cancelScript = scripts.expiredOrderCancelScript as Script;
 
@@ -36,9 +36,9 @@ beforeAll(async () => {
   const open = scriptFromNative({ type: "all", scripts: [] });
   const pool = await lucid
     .newTx()
-    .mintAssets({ [P + "4d5350"]: 1n, [P + "4c50"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
+    .mintAssets({ [P + "4d5350"]: 1n, [P + "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
     .attach.MintingPolicy(open)
-    .pay.ToContract(dep.poolAddress, { kind: "inline", value: poolDatumToData({ assetA: { policy: "", name: "" }, assetB: { policy: P, name: "54455354" }, totalLiquidity: 1_000_000n, reserveA: 10n ** 12n, reserveB: 2n * 10n ** 12n, feeA: 30n, feeB: 30n, batchingStakeScript: "fb".repeat(28) }) }, { lovelace: 5n * ADA, [P + "4d5350"]: 1n, [P + "4c50"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
+    .pay.ToContract(dep.poolAddress, { kind: "inline", value: poolDatumToData({ assetA: { policy: "", name: "" }, assetB: { policy: P, name: "54455354" }, totalLiquidity: 1_000_000n, reserveA: 10n ** 12n, reserveB: 2n * 10n ** 12n, feeA: 30n, feeB: 30n, batchingStakeScript: "fb".repeat(28) }) }, { lovelace: 5n * ADA, [P + "4d5350"]: 1n, [P + "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f"]: 1_000_000n, [P + "54455354"]: 1_000_000n })
     .complete();
   await signAndSubmit(lucid, emulator, pool, [w.a]);
   for (const reward of [minswapAdapter("Custom").rewardAddress, validatorToRewardAddress("Custom", cancelScript)])
@@ -62,7 +62,7 @@ describe("our orders under Minswap's own validators (emulator)", () => {
   it("an expired order of ours is refunded to the vault through Minswap's CancelExpiredOrderByAnyone", async () => {
     const collateral = await collateralOf(lucid, w.agent);
     lucid.selectWallet.fromAddress(w.agent.address, [collateral]);
-    const built = await buildAgentTrade({ lucid, vault, collateral, config: await readConfig(lucid, vault), allowance: await readAllowance(lucid, vault, unit), now: emulator.now(), pool: "4c50", amountIn: 5n * ADA, aToB: true, intentId: "compat-1", purpose: "compat" });
+    const built = await buildAgentTrade({ lucid, vault, collateral, config: await readConfig(lucid, vault), allowance: await readAllowance(lucid, vault, unit), now: emulator.now(), pool: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", amountIn: 5n * ADA, aToB: true, intentId: "compat-1", purpose: "compat" });
     await signAndSubmit(lucid, emulator, built.tx, [w.agent]);
     const [order] = (await lucid.utxosAt(dep.orderAddress)).filter((u) => u.datum);
     // Past the order's expiry (10 minutes after the trade's upper bound).

@@ -75,7 +75,7 @@ const MINSWAP: CatalogueApp = {
       deployment: { lpPolicy: DEVNET_POLICY, poolScript: REF_HOLDER, orderScript: MINSWAP_ORDER_SCRIPT },
       poolAddress: REF_HOLDER_DEVNET_ADDRESS,
       orderAddress: "addr_test1wrdf2f2x8pq3wwk3yv936ksmt59rz94mm66yzge8zj9pk7s0kjph3",
-      pools: [{ lpName: "4c50", label: "ADA ↔ TEST", assetA: "lovelace", assetB: DEVNET_POLICY + "54455354" }],
+      pools: [{ lpName: "860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f", label: "ADA ↔ TEST", assetA: "lovelace", assetB: DEVNET_POLICY + "54455354" }],
     },
   },
 };

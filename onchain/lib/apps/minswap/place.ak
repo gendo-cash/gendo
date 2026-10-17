@@ -5,6 +5,7 @@
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{ScriptHash}
+use aiken/primitive/bytearray
 use apps/minswap/math
 use apps/minswap/types.{
   Deployment, EODNoDatum, MinswapSettings, OAMWithdrawScript, OrderDatum,
@@ -139,20 +140,39 @@ fn valid_order(
 }
 
 /// The order's pool: a reference input at Minswap's pool script holding the
-/// pool auth token and the order's LP asset. Only Minswap mints the auth token.
+/// pool auth token (only Minswap mints it) and the order's LP asset, whose
+/// datum's two assets derive that LP name (Minswap's `compute_lp_asset_name`).
+/// The last check matters: anyone can create a pool that holds another
+/// pool's LP token as a reserve, and that pool's reserves say nothing about
+/// the order's pool.
 fn genuine_pool(refs: List<Input>, dep: Deployment, lp: AssetName) -> PoolDatum {
-  expect Some(i) =
-    list.find(
+  expect Some(p) =
+    list.find_map(
       refs,
       fn(i) {
-        and {
+        if and {
           i.output.address.payment_credential == Script(dep.pool_script),
           assets.quantity_of(i.output.value, dep.lp_policy, pool_auth_name) == 1,
           assets.quantity_of(i.output.value, dep.lp_policy, lp) > 0,
+        } {
+          expect InlineDatum(raw) = i.output.datum
+          expect p: PoolDatum = raw
+          if lp_name_of(p) == lp {
+            Some(p)
+          } else {
+            None
+          }
+        } else {
+          None
         }
       },
     )
-  expect InlineDatum(raw) = i.output.datum
-  expect p: PoolDatum = raw
   p
+}
+
+/// Minswap's `compute_lp_asset_name` (minswap-dex-v2@c3293ad utils.ak).
+pub fn lp_name_of(p: PoolDatum) -> AssetName {
+  let a = crypto.sha3_256(bytearray.concat(p.asset_a.policy_id, p.asset_a.asset_name))
+  let b = crypto.sha3_256(bytearray.concat(p.asset_b.policy_id, p.asset_b.asset_name))
+  crypto.sha3_256(bytearray.concat(a, b))
 }

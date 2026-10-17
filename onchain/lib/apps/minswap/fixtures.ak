@@ -29,7 +29,9 @@ pub const pool_script: ByteArray =
 pub const token_policy: ByteArray =
   #"7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c"
 
-pub const lp_name: ByteArray = #"4c50"
+/// The pool's real LP name: Minswap's `compute_lp_asset_name` of ADA and TOKEN.
+pub const lp_name: ByteArray =
+  #"885203bb4bf4466e72cb2e57d7f64b620e199d4e4c3dc0edebe4201936305605"
 
 pub const other_lp: ByteArray = #"4c51"
 
