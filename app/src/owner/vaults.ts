@@ -21,3 +21,6 @@ export function sidebarVaults(list: MyVault[], needYou: Record<string, number>, 
   const open = order.find((v) => v.policy === current);
   return open && !top.includes(open) ? [...top.slice(0, n - 1), open] : top;
 }
+
+/** Saved vaults whose ids no longer derive their address: vaults from before an update that changed the vault's code. */
+export const staleCount = (list: MyVault[]) => list.length - consistentVaults(list).length;

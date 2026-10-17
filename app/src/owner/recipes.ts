@@ -1,6 +1,9 @@
 // A proposal's recipe: what to build, so any required signer can rebuild it when it goes stale.
 import type { AllowanceDatum, Explanation } from "../../../sdk/src/core/index.ts";
 import type { Grant } from "../../../sdk/src/core/owner.ts";
+import { appChanges } from "../../../sdk/src/core/explain.ts";
+import { minswapAppConfig } from "../../../sdk/src/core/apps/minswap/adapter.ts";
+import type { MinswapSettings } from "../../../sdk/src/core/apps/minswap/data.ts";
 import { CML, CONFIG_TOKEN_NAME, listAllowances, multiAssetToAssets, owner, readAllowance, readConfig, treasuryUtxos, type LucidEvolution, type TxSignBuilder, type Vault } from "../../../sdk/src/core/index.ts";
 
 export type Recipe =
@@ -10,7 +13,8 @@ export type Recipe =
   | { op: "edit"; unit: string; next: AllowanceDatum; topUp: bigint; signers: string[] }
   | { op: "grant"; grant: Grant & { collateral?: bigint }; signers: string[] }
   | { op: "revoke"; unit: string; signers: string[] }
-  | { op: "fund"; lovelace: bigint };
+  | { op: "fund"; lovelace: bigint }
+  | { op: "apps"; action: "enable" | "update" | "disable"; name: "minswap"; settings?: MinswapSettings; signers: string[] };
 
 export const encodeRecipe = (r: Recipe): unknown => JSON.parse(JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? { $n: v.toString() } : v)));
 
@@ -27,6 +31,12 @@ export function decodeRecipe(x: unknown): Recipe | undefined {
       case "edit": return okSigners && typeof r.unit === "string" && r.next && typeof r.topUp === "bigint" ? r : undefined;
       case "grant": return okSigners && r.grant ? r : undefined;
       case "revoke": return okSigners && typeof r.unit === "string" ? r : undefined;
+      case "apps": {
+        const s = r.settings;
+        const okSettings = !!s && Array.isArray(s.pools) && s.pools.every((p) => typeof p === "string") && [s.maxSlippageBps, s.maxBatcherFee, s.maxOrderTtlMs, s.maxCancelTip].every((x) => typeof x === "bigint");
+        if (!okSigners || r.name !== "minswap" || !["enable", "update", "disable"].includes(r.action)) return undefined;
+        return r.action === "disable" || okSettings ? r : undefined;
+      }
       default: return undefined;
     }
   } catch {
@@ -56,6 +66,11 @@ export async function buildRecipe(l: LucidEvolution, vault: Vault, r: Recipe, me
       if (!al) throw new Error("that agent's allowance isn't on chain any more");
       return owner.revokeAllowance(l, vault, cfg, { utxo: al.utxo, unit: al.unit }, r.signers);
     }
+    case "apps": {
+      if (r.action === "disable") return owner.disableApp(l, vault, cfg, r.name, r.signers);
+      const app = minswapAppConfig(l.config().network!, r.settings!);
+      return r.action === "enable" ? owner.enableApp(l, vault, cfg, app, r.signers) : owner.updateApp(l, vault, cfg, app, r.signers);
+    }
     case "fund": {
       // Funding needs no owner, but naming the funder as a signer lets it go through the inbox,
       // which submits a fully signed tx at once (no separate submit path on the server).
@@ -75,6 +90,7 @@ export function titleOf(r: Recipe, labels: Record<string, string>): string {
     case "grant": return "Add an agent";
     case "revoke": return `Revoke ${n(r.unit)}`;
     case "fund": return "Fund the treasury";
+    case "apps": return r.action === "enable" ? "Enable Minswap" : r.action === "disable" ? "Disable Minswap" : "Change Minswap settings";
   }
 }
 
@@ -96,6 +112,11 @@ export function recipeMatches(r: Recipe, e: Explanation): boolean {
       return c.length === 1 && c[0]!.kind === "grant";
     case "fund":
       return c.length === 0 && Object.keys(e.leavesVault).length === 0;
+    case "apps": {
+      if (c.length !== 1 || c[0]!.kind !== "config") return false;
+      const d = appChanges(c[0]!.before, c[0]!.after);
+      return r.action === "enable" ? d.added.some((a) => a.name === r.name) : r.action === "disable" ? d.removed.includes(r.name) : d.changed.some((x) => x.name === r.name);
+    }
   }
 }
 

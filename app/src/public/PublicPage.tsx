@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { allowanceHistory, readVault, type Get, type PaymentView, type ReadNetwork, type VaultView } from "../../../sdk/src/read/index.ts";
+import { minswapSettingsFromCbor } from "../../../sdk/src/read/decode.ts";
+import { poolByLp } from "../../../sdk/src/core/apps/catalogue.ts";
 import { Avatar, Chain, Mark, Netband, Spinner } from "../ui/Brand.tsx";
-import { ada, allowanceSentence, cleanPurpose, fromNow, paymentLine, periodName } from "./format.ts";
+import { ada, amountOf, allowanceSentence, cleanPurpose, fromNow, paymentLine, periodName } from "./format.ts";
 
 const get: Get = async (path) => {
   let r: Response;
@@ -80,10 +82,11 @@ export function PublicPage({ policy, network }: { policy: string; network: ReadN
           <h1>{s.name ?? "A gendo vault"}</h1>
           <p className="doc-lede">
             {cfg?.paused && <><b className="seal">Paused.</b>{" "}</>}
-            It holds <b className="mono">{ada(vault.treasuryLovelace)} ADA</b>.{" "}
+            It holds <b className="mono">{ada(vault.treasuryLovelace)} ADA</b>{tokensLine(vault.treasury)}.{" "}
             {active === 0 ? "No agent can pay from it right now." : <><b>{plural(active, "agent", "agents")}</b> may pay from it, only within the limits written below.</>}{" "}
             {cfg && <>Any change needs owners' seals: <b>{cfg.threshold} of {cfg.owners.length} must sign</b>.</>}{" "}
             In the last 7 days its agents paid <b className="mono">{ada(paidWeek)} ADA</b> in {plural(week.length, "payment", "payments")}.
+            {appsLine(cfg?.apps ?? [])}
           </p>
           <p className="doc-ids">
             <span>Address <Chain value={vault.address} network={network} label={short(vault.address)} /></span>
@@ -130,7 +133,7 @@ export function PublicPage({ policy, network }: { policy: string; network: ReadN
                 const spend = p.kind === "agent" || p.kind === "co-signed";
                 const note = p.purpose ? cleanPurpose(p.purpose) : "";
                 return (
-                  <li key={p.txHash + p.unit} className={spend ? "" : "quiet"}>
+                  <li key={p.txHash + p.unit} className={spend || p.trade ? "" : "quiet"}>
                     <span className="mono ledger-date">{new Date(p.time).toISOString().slice(0, 10)}</span>
                     <span className="ledger-what">
                       {s.labels[p.unit] ? `${s.labels[p.unit]}: ` : ""}{paymentLine(p)}.
@@ -138,7 +141,7 @@ export function PublicPage({ policy, network }: { policy: string; network: ReadN
                       {note && <span className="ledger-note">The agent's note (not verified): {note}</span>}
                       <span className="faint small">Transaction <Chain value={p.txHash} network={network} label={short(p.txHash)} /></span>
                     </span>
-                    <span className="mono ledger-amt">{spend ? `${ada(paid)} ADA` : ""}</span>
+                    <span className="mono ledger-amt">{spend ? `${ada(paid)} ADA` : p.trade ? amountOf(p.trade.sells, p.trade.amountIn) : ""}</span>
                   </li>
                 );
               })}
@@ -163,4 +166,21 @@ export function PublicPage({ policy, network }: { policy: string; network: ReadN
     </>,
     { "data-ready": "" },
   );
+}
+
+/** Tokens in the treasury (swap proceeds), after its ADA: ", and 9700000 NACRE". */
+function tokensLine(t: Record<string, bigint>): string {
+  const tokens = Object.entries(t).filter(([u, q]) => u !== "lovelace" && q > 0n).map(([u, q]) => amountOf(u, q));
+  return tokens.length ? ` and ${tokens.join(", ")}` : "";
+}
+
+/** The vault's apps and the rule people care about most: " Agents it allows may swap on Minswap (ADA ↔ NACRE), never more than 3% below the pool's price." */
+function appsLine(apps: { name: string; settings: string }[]): string {
+  const parts = apps.flatMap((a) => {
+    const s = a.name === "minswap" ? minswapSettingsFromCbor(a.settings) : null;
+    if (!s) return [];
+    const pools = s.pools.map((lp) => poolByLp(lp)?.pool.label ?? `${lp.slice(0, 8)}…`).join(", ");
+    return [`on Minswap (${pools}), never more than ${Number(s.maxSlippageBps) / 100}% below the pool's price`];
+  });
+  return parts.length ? ` Agents it allows may swap ${parts.join("; ")}.` : "";
 }

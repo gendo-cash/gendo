@@ -1,0 +1,125 @@
+// The vault's DeFi apps: what the catalogue offers, what this vault enabled and with which rules.
+// Enabling or changing an app is a vault settings change: proposed here, signed by the threshold.
+import { useState } from "react";
+import { catalogue, type CatalogueApp } from "../../../../sdk/src/core/apps/catalogue.ts";
+import { minswapAdapter } from "../../../../sdk/src/core/apps/minswap/adapter.ts";
+import { settingsFromData } from "../../../../sdk/src/core/apps/minswap/data.ts";
+import type { ConfigDatum } from "../../../../sdk/src/core/index.ts";
+import type { Recipe } from "../recipes.ts";
+import { ErrorNote, Signers, defaultSigners, useOwner } from "../ui.tsx";
+import { minswapForm, minswapProblems, type MinswapForm } from "../validate.ts";
+import { ada } from "../../public/format.ts";
+
+export function AppsTab({ cfg, busy, onPropose }: { cfg: ConfigDatum; busy: boolean; onPropose(r: Recipe, done: string): void }) {
+  const o = useOwner();
+  const apps = catalogue().filter((a) => a.networks[o.net as "Preprod" | "Custom"]);
+  return (
+    <>
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>Apps let agents do more than pay: trade inside their budget, through code the chain checks on every order. An app does nothing until you enable it here and allow it for an agent in its budget.</p>
+      {apps.map((a) => <AppCard key={a.name} app={a} cfg={cfg} busy={busy} onPropose={onPropose} />)}
+      {!apps.length && <p className="muted">No apps are available on this network yet.</p>}
+      <span className="faint" style={{ fontSize: 12 }}>Something missing? Apps are added to gendo's catalogue by pull request, after review and an audit of their adapter.</span>
+    </>
+  );
+}
+
+function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: ConfigDatum; busy: boolean; onPropose(r: Recipe, done: string): void }) {
+  const o = useOwner();
+  const network = app.networks[o.net as "Preprod" | "Custom"]!;
+  const enabled = cfg.apps.find((x) => x.name === app.name);
+  const current = (() => {
+    try {
+      return enabled ? settingsFromData(enabled.settings) : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+  const outdated = enabled && enabled.adapter !== minswapAdapter(o.net).hash;
+  const threshold = Number(cfg.threshold);
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState<MinswapForm>(minswapForm());
+  const [signers, setSigners] = useState<string[]>(() => defaultSigners(cfg.owners, threshold, o.me.pkh));
+  const [tried, setTried] = useState(false);
+  const problems = minswapProblems(f);
+  const label = (lp: string) => network.pools.find((p) => p.lpName === lp)?.label ?? `${lp.slice(0, 8)}…`;
+  const help = (field: string) => app.settings.find((s) => s.field === field)?.help;
+  const start = () => {
+    setF(minswapForm(current));
+    setTried(false);
+    setEditing(true);
+  };
+  const submit = () => {
+    setTried(true);
+    if (problems.length || signers.length !== threshold) return;
+    onPropose({ op: "apps", action: enabled ? "update" : "enable", name: "minswap", settings: minswapForm.toSettings(f), signers }, enabled ? "Settings change proposed." : `${app.title} proposed.`);
+    setEditing(false);
+  };
+  const field = (id: keyof MinswapForm, name: string, unit: string, helpOf: string) => (
+    <div className="field">
+      <label htmlFor={`ms-${id}`}>{name}</label>
+      <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input id={`ms-${id}`} inputMode="decimal" value={f[id] as string} onChange={(e) => setF({ ...f, [id]: e.target.value })} style={{ width: 120 }} />
+        <span className="faint">{unit}</span>
+      </span>
+      <span className="hint">{help(helpOf)}</span>
+    </div>
+  );
+  return (
+    <section className="panel">
+      <div className="ph">
+        <h2>{app.title}</h2>
+        <span className="cap">{enabled ? "Enabled" : "Not enabled"}</span>
+      </div>
+      <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+        <span>{app.summary}</span>
+        <span className="faint" style={{ fontSize: 12 }}>
+          Audited by {app.audits.map((x, i) => <span key={x.by}>{i > 0 && ", "}<a href={x.url} target="_blank" rel="noopener noreferrer">{x.by}</a></span>)}. <a href={app.website} target="_blank" rel="noopener noreferrer">{app.website.replace(/^https:\/\//, "")}</a>
+        </span>
+        {outdated && <ErrorNote error="This vault uses an older version of this app's adapter. Change its settings to move to the current one." />}
+      </div>
+      {enabled && current && !editing && (
+        <>
+          <div className="kvrow"><span>Pools</span><span>{current.pools.map(label).join(", ")}</span></div>
+          <div className="kvrow"><span>Max slippage</span><span>{Number(current.maxSlippageBps) / 100}%</span></div>
+          <div className="kvrow"><span>Max batcher fee</span><span>{ada(current.maxBatcherFee)} ADA</span></div>
+          <div className="kvrow"><span>Order lifetime</span><span>{Number(current.maxOrderTtlMs) / 3_600_000} h</span></div>
+          <div className="kvrow"><span>Cancel tip</span><span>{ada(current.maxCancelTip)} ADA</span></div>
+        </>
+      )}
+      {!editing && (
+        <div style={{ padding: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" className={enabled ? "btn" : "btn pri"} disabled={busy} onClick={start}>{enabled ? "Change settings" : `Enable ${app.title}`}</button>
+          {enabled && <button type="button" className="btn stop" disabled={busy || signers.length !== threshold} onClick={() => onPropose({ op: "apps", action: "disable", name: "minswap", signers }, `${app.title} disable proposed.`)}>Disable</button>}
+        </div>
+      )}
+      {editing && (
+        <>
+          <div className="field">
+            <label>Pools</label>
+            <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {network.pools.map((p) => (
+                <label key={p.lpName} style={{ display: "flex", gap: 8, alignItems: "center", padding: 0 }}>
+                  <input type="checkbox" checked={f.pools.includes(p.lpName)} onChange={(e) => setF({ ...f, pools: e.target.checked ? [...f.pools, p.lpName] : f.pools.filter((x) => x !== p.lpName) })} />
+                  {p.label}
+                </label>
+              ))}
+            </span>
+            <span className="hint">{help("pools")}</span>
+          </div>
+          {field("slippage", "Max slippage", "%", "maxSlippageBps")}
+          {field("fee", "Max batcher fee", "ADA", "maxBatcherFee")}
+          {field("hours", "Order lifetime", "hours", "maxOrderTtlMs")}
+          {field("tip", "Cancel tip", "ADA", "maxCancelTip")}
+          <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            <Signers owners={cfg.owners} threshold={threshold} me={o.me.pkh} value={signers} onChange={setSigners} />
+            {tried && problems.map((p) => <ErrorNote key={p} error={p} />)}
+            <span style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn pri" disabled={busy} onClick={submit}>Review and propose</button>
+              <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>
+            </span>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}

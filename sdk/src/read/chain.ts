@@ -26,6 +26,8 @@ export type AllowanceView = {
   periodEndsAt?: number;
   expiresAt?: number;
   maxFee?: bigint;
+  /** Apps this agent may trade with (names; they work only while the vault enables them). */
+  apps?: string[];
 };
 export type VaultView = {
   policy: string;
@@ -114,6 +116,7 @@ function allowanceView(u: BfUtxo, unit: string, network: ReadNetwork, now: bigin
     periodEndsAt: Number(d.windowStart + (k + 1n) * d.periodMs),
     expiresAt: Number(d.expiresAt),
     maxFee: d.maxFee,
+    apps: d.apps,
   };
 }
 

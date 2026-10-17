@@ -1,7 +1,7 @@
 import { versionNote } from "../install.ts";
 import { useEffect, useState } from "react";
 import { allowanceHistory } from "../../../../sdk/src/read/index.ts";
-import { ada, allowanceSentence, cleanPurpose, paymentLine } from "../../public/format.ts";
+import { ada, allowanceSentence, cleanPurpose, paymentLine, tokenName } from "../../public/format.ts";
 import { navigate } from "../../route.ts";
 import { api } from "../api.ts";
 import { chainGet, readLight, vaultFromId } from "../chain.ts";
@@ -11,9 +11,10 @@ import { toLovelace } from "../validate.ts";
 import { Copy, ErrorNote, Link, Shell, Signers, defaultSigners, short, useLoad, useOwner, usePoll } from "../ui.tsx";
 import { Avatar, Chain, Spinner } from "../../ui/Brand.tsx";
 import { inFlight } from "../status.ts";
+import { AppsTab } from "./Apps.tsx";
 import { partialSign } from "../wallet.ts";
 
-export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "activity" | "treasury" | "settings" }) {
+export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "activity" | "treasury" | "apps" | "settings" }) {
   const o = useOwner();
   const mine = o.vaults.find((v) => v.policy === policy);
   const data = useLoad(async () => {
@@ -75,7 +76,7 @@ export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "ac
       {review.panel}
       {cfg?.paused && <div className="banner">All agents are paused. No agent can pay. Unpausing needs {String(cfg.threshold)} of {cfg.owners.length} owners.</div>}
       <div className="tabs vtabs" role="tablist">
-        {(["agents", "activity", "treasury", "settings"] as const).map((t) => (
+        {(["agents", "activity", "treasury", "apps", "settings"] as const).map((t) => (
           <button key={t} type="button" role="tab" aria-selected={t === tab} className={t === tab ? "tab on" : "tab"} onClick={() => navigate(`/v/${policy}/${t}`)}>{t[0]!.toUpperCase() + t.slice(1)}</button>
         ))}
       </div>
@@ -117,8 +118,9 @@ export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "ac
         )}
         {view && tab === "activity" && <Activity policy={policy} quiet={!!busy || waiting} />}
         {view && tab === "treasury" && (
-          <Treasury lovelace={view.treasuryLovelace} address={view.address} busy={!!busy} net={o.net} onFund={(lovelace) => void propose({ op: "fund", lovelace }, "Funding sent.")} />
+          <Treasury lovelace={view.treasuryLovelace} tokens={view.treasury} address={view.address} busy={!!busy} net={o.net} onFund={(lovelace) => void propose({ op: "fund", lovelace }, "Funding sent.")} />
         )}
+        {view && cfg && tab === "apps" && <AppsTab cfg={cfg} busy={!!busy} onPropose={(r, done) => void propose(r, done)} />}
         {view && cfg && tab === "settings" && (
           <>
             <section className="panel">
@@ -174,7 +176,7 @@ function Activity({ policy, quiet }: { policy: string; quiet: boolean }) {
   );
 }
 
-function Treasury({ lovelace, address, busy, net, onFund }: { lovelace: bigint; address: string; busy: boolean; net: string; onFund(l: bigint): void }) {
+function Treasury({ lovelace, tokens, address, busy, net, onFund }: { lovelace: bigint; tokens: Record<string, bigint>; address: string; busy: boolean; net: string; onFund(l: bigint): void }) {
   const [amt, setAmt] = useState("100");
   const l = toLovelace(amt);
   return (
@@ -182,7 +184,10 @@ function Treasury({ lovelace, address, busy, net, onFund }: { lovelace: bigint; 
       <div className="ph"><h2>Treasury</h2></div>
       <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 28, fontWeight: 900 }} className="mono">{ada(lovelace)} <span className="faint" style={{ fontSize: 14 }}>ADA</span></div>
-        <div className="faint">Held by the vault script. Owners move it with their threshold; agents only within their allowance.</div>
+        {Object.entries(tokens).filter(([u, q]) => u !== "lovelace" && q > 0n).map(([u, q]) => (
+          <div key={u} className="kvrow"><span>{tokenName(u)}</span><span className="mono">{q.toString()}</span></div>
+        ))}
+        <div className="faint">Held by the vault script. Owners move it with their threshold; agents only within their allowance. Swap proceeds land here.</div>
         <div className="kvrow"><span>Vault address</span><span className="mono"><Chain value={address} network={net} label={short(address)} /> <Copy text={address} /></span></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label htmlFor="fundAmt">Fund from your wallet</label>

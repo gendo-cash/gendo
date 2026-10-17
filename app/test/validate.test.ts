@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { agentProblems, buildError, createConfig, createOptions, createProblems, ownerHint, ownerKeyOf, toLovelace, type AgentForm, type CreateForm } from "../src/owner/validate.ts";
 import { credentialToAddress } from "../../sdk/src/core/index.ts";
 
-const ok: AgentForm = { name: "payout-bot", agentKey: "9".repeat(56), perPayment: "10", budget: "25", period: "day", payees: ["addr_test1qok"], expires: "2099-01-01", fund: "40" };
+const ok: AgentForm = { name: "payout-bot", agentKey: "9".repeat(56), perPayment: "10", budget: "25", period: "day", payees: ["addr_test1qok"], expires: "2099-01-01", fund: "40", apps: [] };
 const opts = { isNew: true, nowMs: Date.UTC(2026, 9, 13), owners: ["1".repeat(56)], isKeyAddress: (s: string) => s.startsWith("addr_test1q") };
 
 describe("agent form", () => {
@@ -87,4 +87,39 @@ describe("what creating a vault builds", () => {
     expect(createOptions(f, me, "Preprod")).toEqual({ fund: 10_000_000n, signer: me }));
   it("opted in: the code is parked at the always-fail holder", () =>
     expect(createOptions({ ...f, refScript: true }, me, "Preprod").refScriptAddress).toMatch(/^addr_test1w/));
+});
+
+import { minswapForm, minswapProblems, type MinswapForm } from "../src/owner/validate.ts";
+
+describe("the Minswap settings form", () => {
+  const filled: MinswapForm = { pools: ["4c50"], slippage: "3", fee: "2", hours: "24", tip: "0.5" };
+  it("starts empty: no defaults", () => {
+    expect(minswapForm()).toEqual({ pools: [], slippage: "", fee: "", hours: "", tip: "" });
+    expect(minswapProblems(minswapForm()).length).toBeGreaterThanOrEqual(5);
+  });
+  it("turns a filled form into the chain's settings", () => {
+    expect(minswapProblems(filled)).toEqual([]);
+    expect(minswapForm.toSettings(filled)).toEqual({ pools: ["4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 86_400_000n, maxCancelTip: 500_000n });
+  });
+  it("refuses what the chain would refuse or what can't work", () => {
+    expect(minswapProblems({ ...filled, slippage: "21" })).toContain("Max slippage is at most 20%.");
+    expect(minswapProblems({ ...filled, slippage: "0" })).toContain("Max slippage must be more than 0%.");
+    expect(minswapProblems({ ...filled, pools: [] })).toContain("Pick at least one pool.");
+    expect(minswapProblems({ ...filled, fee: "0" })).toContain("Max batcher fee must be more than 0 ADA.");
+    expect(minswapProblems({ ...filled, hours: "0" })).toContain("Order lifetime must be more than 0 hours.");
+    expect(minswapProblems({ ...filled, tip: "x" })).toContain("Cancel tip must be an ADA amount (0 is fine).");
+  });
+  it("shows current settings when editing", () => {
+    expect(minswapForm({ pools: ["4c50"], maxSlippageBps: 150n, maxBatcherFee: 1_500_000n, maxOrderTtlMs: 7_200_000n, maxCancelTip: 0n })).toEqual({ pools: ["4c50"], slippage: "1.5", fee: "1.5", hours: "2", tip: "0" });
+  });
+});
+
+import { editedDatum } from "../src/owner/validate.ts";
+
+describe("an agent's apps", () => {
+  it("an edit carries the apps the owners picked", () => {
+    const al = { agent: "9".repeat(56), destinations: [], caps: [{ policy: "", name: "", windowCap: 1n, txCap: 1n }], spent: [0n], windowStart: 0n, periodMs: 1n, expiresAt: 2n, maxFee: 0n, apps: [] };
+    const next = editedDatum(al, { perPayment: 1n, budget: 1n, period: undefined, payees: [], expiresAt: 2n, apps: ["minswap"] }, () => { throw new Error("no payees"); });
+    expect(next.apps).toEqual(["minswap"]);
+  });
 });

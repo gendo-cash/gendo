@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AllowanceDatum, Explanation } from "../../sdk/src/core/index.ts";
 import { confirmWords } from "../../sdk/src/core/pairing.ts";
 import { detailOf, sentence } from "../src/owner/diff.ts";
+import { settingsToData } from "../../sdk/src/core/apps/minswap/data.ts";
 import { needsConfirm } from "../src/owner/status.ts";
 
 const h = (n: number) => n.toString(16).padStart(2, "0").repeat(28);
@@ -13,6 +14,26 @@ const al = (txCap: bigint, windowCap: bigint, payees = 3): AllowanceDatum => ({
 });
 const base: Omit<Explanation, "changes"> = { hash: "aa".repeat(32), requiredSigners: [h(1), h(2)], changes: [] as never, leavesVault: {}, flows: [], collateralAtRisk: [], fee: 300_000n, warnings: [] } as never;
 const ctx = { viewer: h(1), vaultAddress: "addr_test1wvault", labels: { [h(5) + "01"]: "payout-bot" }, payeesOf: (d: AllowanceDatum) => d.destinations.map((_, i) => `addr_test1q${i}`), isMine: () => false, short: (s: string) => s.slice(0, 10) };
+
+describe("detailOf: apps", () => {
+  const c = { owners: [h(1), h(2)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] as never[] };
+  const settings = settingsToData({ pools: ["e5358cee5d14b83d0a4e93f321c0c3addaf8fb5010a1127b6da6a8adc0a16fd3"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 86_400_000n, maxCancelTip: 500_000n });
+  const app = { name: "minswap", adapter: h(0xad), orderScript: h(0x0d), settings };
+  it("enabling Minswap shows each of its rules, with pool labels", () => {
+    const d = detailOf({ ...base, changes: [{ kind: "config", before: c, after: { ...c, apps: [app] } }] }, ctx);
+    expect(d.title).toBe("Enable Minswap");
+    expect(d.rows).toContainEqual({ k: "Minswap pools", now: "—", next: "ADA ↔ NACRE", changed: true });
+    expect(d.rows).toContainEqual({ k: "Minswap max slippage", now: "—", next: "3%", changed: true });
+    expect(d.rows).toContainEqual({ k: "Minswap order lifetime", now: "—", next: "24 h", changed: true });
+  });
+  it("disabling it says so", () => {
+    expect(detailOf({ ...base, changes: [{ kind: "config", before: { ...c, apps: [app] }, after: c }] }, ctx).title).toBe("Disable Minswap");
+  });
+  it("an agent's apps show as a row", () => {
+    const d = detailOf({ ...base, changes: [{ kind: "edit", unit: h(5) + "01", before: al(10_000_000n, 25_000_000n), after: { ...al(10_000_000n, 25_000_000n), apps: ["minswap"] }, lovelaceBefore: 1n, lovelaceAfter: 1n }] }, ctx);
+    expect(d.rows).toContainEqual({ k: "Apps", now: "none", next: "Minswap", changed: true });
+  });
+});
 
 describe("detailOf", () => {
   it("a budget raise: one changed row and the two sentences", () => {

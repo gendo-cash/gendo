@@ -134,6 +134,7 @@ describe("vault state from the chain", () => {
     const v = await readVault(fakeGet([cfgUtxo, utxo("a1".repeat(32), { lovelace: "60000000", [unitA]: "1" }, allowanceToData(allowance(3_000_000n, t0))), utxo("e0".repeat(32), { lovelace: "150000000" }, null)]), policy, "Preprod", Number(t0 + 3_600_000n));
     expect(v!.config).toEqual(cfg);
     expect(v!.treasuryLovelace).toBe(150_000_000n);
+    expect(v!.allowances[0]!.apps).toEqual([]);
     const a = v!.allowances[0]!;
     expect(a.status).toBe("active");
     expect([a.txHash, a.outputIndex]).toEqual(["a1".repeat(32), 0]);
@@ -297,6 +298,16 @@ describe("swaps and treasury tokens from the chain", () => {
     const v = await readVault(async (path) => (path.startsWith(`/addresses/${addr}/utxos`) && path.includes("page=1") ? utxos : undefined), policy, "Preprod", 1_790_000_000_000);
     expect(v!.treasuryLovelace).toBe(152_000_000n);
     expect(v!.treasury).toEqual({ lovelace: 152_000_000n, [NACRE]: 9_300_000n });
+  });
+});
+
+describe("app settings without Lucid", () => {
+  it("Minswap settings decode the same as the SDK's", async () => {
+    const { settingsToData } = await import("../../src/core/apps/minswap/data.js");
+    const { minswapSettingsFromCbor } = await import("../../src/read/decode.js");
+    const s = { pools: ["4c51", "4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 3_600_000n, maxCancelTip: 500_000n };
+    expect(minswapSettingsFromCbor(settingsToData(s))).toEqual(s);
+    expect(minswapSettingsFromCbor("d87980")).toBeNull();
   });
 });
 

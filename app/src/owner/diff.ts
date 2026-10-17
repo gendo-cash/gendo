@@ -3,6 +3,9 @@
 import type { AllowanceDatum, ConfigDatum, Explanation } from "../../../sdk/src/core/index.ts";
 import { confirmWords } from "../../../sdk/src/core/pairing.ts";
 import { ada, periodName } from "../public/format.ts";
+import { appChanges } from "../../../sdk/src/core/explain.ts";
+import { settingsFromData } from "../../../sdk/src/core/apps/minswap/data.ts";
+import { poolByLp } from "../../../sdk/src/core/apps/catalogue.ts";
 
 export type Row = { k: string; now: string; next: string; changed: boolean };
 export type Detail = { kind: "Change" | "Agent request"; title: string; summary: string; rows: Row[]; before?: string; after?: string; money: { label: string; value: string }[]; warnings: string[] };
@@ -46,6 +49,7 @@ function allowanceRows(a: AllowanceDatum | null, b: AllowanceDatum | null, ctx: 
     ["Expires", (d: AllowanceDatum) => day(d.expiresAt)],
     ["Max fee", (d: AllowanceDatum) => `${ada(d.maxFee)} ADA`],
     ["Agent key", (d: AllowanceDatum) => `${confirmWords(d.agent)} (${d.agent})`],
+    ["Apps", (d: AllowanceDatum) => (d.apps.length ? d.apps.map(appTitle).join(", ") : "none")],
   ].map(([k, f]) => {
     const now = v(a, f as (d: AllowanceDatum) => string);
     const next = v(b, f as (d: AllowanceDatum) => string);
@@ -54,6 +58,38 @@ function allowanceRows(a: AllowanceDatum | null, b: AllowanceDatum | null, ctx: 
   for (const x of pb.filter((x) => !pa.includes(x))) rows.push({ k: "Payee added", now: "—", next: x, changed: true });
   for (const x of pa.filter((x) => !pb.includes(x))) rows.push({ k: "Payee removed", now: x, next: "—", changed: true });
   return rows;
+}
+
+const appTitle = (name: string) => (name === "minswap" ? "Minswap" : name);
+const hours = (ms: bigint) => (ms % 3_600_000n === 0n ? `${ms / 3_600_000n} h` : `${Number(ms) / 60_000} min`);
+
+/** An app's settings as rows ("Minswap max slippage" …), decoded from the config: never from server text. */
+function appFields(app: { name: string; settings: string } | undefined): Record<string, string> {
+  if (!app) return {};
+  try {
+    const s = settingsFromData(app.settings);
+    return {
+      pools: s.pools.map((lp) => poolByLp(lp)?.pool.label ?? lp).join(", "),
+      "max slippage": `${Number(s.maxSlippageBps) / 100}%`,
+      "max batcher fee": `${ada(s.maxBatcherFee)} ADA`,
+      "order lifetime": hours(s.maxOrderTtlMs),
+      "cancel tip": `${ada(s.maxCancelTip)} ADA`,
+    };
+  } catch {
+    return { settings: "unreadable (every order would be refused)" };
+  }
+}
+
+function appRows(a: ConfigDatum | null, b: ConfigDatum | null): Row[] {
+  const names = [...new Set([...(a?.apps ?? []), ...(b?.apps ?? [])].map((x) => x.name))];
+  return names.flatMap((name) => {
+    const before = appFields(a?.apps.find((x) => x.name === name));
+    const after = appFields(b?.apps.find((x) => x.name === name));
+    const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+    return keys
+      .map((k) => ({ k: `${appTitle(name)} ${k}`, now: before[k] ?? "—", next: after[k] ?? "—", changed: (before[k] ?? "—") !== (after[k] ?? "—") }))
+      .filter((r) => r.changed || (a && b));
+  });
 }
 
 function configRows(a: ConfigDatum | null, b: ConfigDatum | null, ctx: Ctx): Row[] {
@@ -71,6 +107,7 @@ function configRows(a: ConfigDatum | null, b: ConfigDatum | null, ctx: Ctx): Row
   const ob = b?.owners ?? [];
   for (const o of ob.filter((o) => !oa.includes(o))) rows.push({ k: "Owner added", now: "—", next: o, changed: true });
   for (const o of oa.filter((o) => !ob.includes(o))) rows.push({ k: "Owner removed", now: o, next: "—", changed: true });
+  rows.push(...appRows(a, b));
   return rows;
 }
 
@@ -127,6 +164,12 @@ export function detailOf(e: Explanation, ctx: Ctx): Detail {
   }
   if (cfg && cfg.kind === "config") {
     const a = cfg.before, b = cfg.after;
+    const apps = appChanges(a, b);
+    const appTitleOf = apps.added.length === 1 && !apps.removed.length && !apps.changed.length ? `Enable ${appTitle(apps.added[0]!.name)}`
+      : apps.removed.length === 1 && !apps.added.length && !apps.changed.length ? `Disable ${appTitle(apps.removed[0]!)}`
+      : apps.changed.length === 1 && !apps.added.length && !apps.removed.length ? `Change ${appTitle(apps.changed[0]!.name)} settings` : undefined;
+    if (appTitleOf && a && b && a.paused === b.paused && a.threshold === b.threshold && a.owners.join() === b.owners.join())
+      return out({ kind: "Change", title: appTitleOf, summary: appTitleOf.startsWith("Disable") ? `${appTitleOf}: agents can no longer trade with it. Orders already placed still settle or expire back to the vault.` : `${appTitleOf}. Agents trade with it only if their budget allows it, and only within these rules.`, rows: configRows(a, b, ctx) });
     const title = a && b && a.paused !== b.paused && a.threshold === b.threshold && a.owners.join() === b.owners.join()
       ? (b.paused ? "Pause all agents" : "Unpause")
       : a && b && (a.threshold !== b.threshold || a.owners.join() !== b.owners.join()) ? "Change owners or threshold" : "Change vault settings";

@@ -5,7 +5,7 @@ import { refHolderAddress } from "../../../sdk/src/core/vault.ts";
 import type { AllowanceDatum, ConfigDatum, PlutusAddress } from "../../../sdk/src/core/data.ts";
 import { ada } from "../public/format.ts";
 
-export type AgentForm = { name: string; agentKey: string; perPayment: string; budget: string; period: "day" | "week" | "month"; payees: string[]; expires: string; fund: string };
+export type AgentForm = { name: string; agentKey: string; perPayment: string; budget: string; period: "day" | "week" | "month"; payees: string[]; expires: string; fund: string; /** Vault apps this agent may trade with. */ apps: string[] };
 export const PERIOD_MS = { day: 86_400_000n, week: 604_800_000n, month: 2_592_000_000n } as const;
 
 /** Decimal ADA to lovelace, exactly; undefined for anything else. */
@@ -42,14 +42,14 @@ export function agentProblems(f: AgentForm, o: { isNew: boolean; nowMs: number; 
  */
 export function editedDatum(
   al: AllowanceDatum,
-  f: { perPayment: bigint; budget: bigint; period: bigint | undefined; payees: string[]; expiresAt: bigint },
+  f: { perPayment: bigint; budget: bigint; period: bigint | undefined; payees: string[]; expiresAt: bigint; apps?: string[] },
   toAddress: (bech32: string) => PlutusAddress,
 ): AllowanceDatum {
   const lov = { policy: "", name: "", windowCap: f.budget, txCap: f.perPayment };
   const i = al.caps.findIndex((c) => c.policy === "" && c.name === "");
   const caps = i >= 0 ? al.caps.map((c, j) => (j === i ? lov : c)) : [...al.caps, lov];
   const spent = i >= 0 ? al.spent : [...al.spent, 0n];
-  return { ...al, caps, spent, destinations: f.payees.map(toAddress), periodMs: f.period ?? al.periodMs, expiresAt: f.expiresAt };
+  return { ...al, caps, spent, destinations: f.payees.map(toAddress), periodMs: f.period ?? al.periodMs, expiresAt: f.expiresAt, apps: f.apps ?? al.apps };
 }
 
 // --- creating a vault --------------------------------------------------------
@@ -131,4 +131,56 @@ export function buildError(message: string): string {
 /** What createVault gets: the treasury deposit, the creator as signer, and the reference script only if asked for. */
 export function createOptions(f: CreateForm, me: string, net: "Preprod" | "Custom"): { fund: bigint; signer: string; refScriptAddress?: string } {
   return { fund: toLovelace(f.fund) ?? 0n, signer: me, ...(f.refScript ? { refScriptAddress: refHolderAddress(net) } : {}) };
+}
+
+// --- the Minswap settings form (no defaults: every field starts empty) ---
+
+export type MinswapForm = { pools: string[]; slippage: string; fee: string; hours: string; tip: string };
+type MinswapSettingsBig = { pools: string[]; maxSlippageBps: bigint; maxBatcherFee: bigint; maxOrderTtlMs: bigint; maxCancelTip: bigint };
+
+const decimal = (n: bigint, unit: bigint) => {
+  const whole = n / unit;
+  const frac = (n % unit).toString().padStart(String(unit).length - 1, "0").replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : `${whole}`;
+};
+
+/** An empty form, or the current settings when editing. */
+export function minswapForm(current?: MinswapSettingsBig): MinswapForm {
+  if (!current) return { pools: [], slippage: "", fee: "", hours: "", tip: "" };
+  return {
+    pools: current.pools,
+    slippage: decimal(current.maxSlippageBps, 100n),
+    fee: decimal(current.maxBatcherFee, 1_000_000n),
+    hours: decimal(current.maxOrderTtlMs, 3_600_000n),
+    tip: decimal(current.maxCancelTip, 1_000_000n),
+  };
+}
+
+const pctToBps = (s: string) => (/^\d{1,2}(\.\d{1,2})?$/.test(s.trim()) ? BigInt(Math.round(Number(s) * 100)) : undefined);
+const hoursToMs = (s: string) => (/^\d{1,4}(\.\d{1,2})?$/.test(s.trim()) ? BigInt(Math.round(Number(s) * 3_600_000)) : undefined);
+
+minswapForm.toSettings = (f: MinswapForm): MinswapSettingsBig => ({
+  pools: f.pools,
+  maxSlippageBps: pctToBps(f.slippage)!,
+  maxBatcherFee: toLovelace(f.fee)!,
+  maxOrderTtlMs: hoursToMs(f.hours)!,
+  maxCancelTip: toLovelace(f.tip)!,
+});
+
+export function minswapProblems(f: MinswapForm): string[] {
+  const p: string[] = [];
+  if (!f.pools.length) p.push("Pick at least one pool.");
+  if (f.pools.length > 8) p.push("At most 8 pools.");
+  const bps = pctToBps(f.slippage);
+  if (bps === undefined) p.push("Max slippage must be a percentage, e.g. 3.");
+  else if (bps <= 0n) p.push("Max slippage must be more than 0%.");
+  else if (bps > 2000n) p.push("Max slippage is at most 20%.");
+  const fee = toLovelace(f.fee);
+  if (fee === undefined) p.push("Max batcher fee must be an ADA amount.");
+  else if (fee <= 0n) p.push("Max batcher fee must be more than 0 ADA.");
+  const ttl = hoursToMs(f.hours);
+  if (ttl === undefined) p.push("Order lifetime must be a number of hours.");
+  else if (ttl <= 0n) p.push("Order lifetime must be more than 0 hours.");
+  if (toLovelace(f.tip) === undefined) p.push("Cancel tip must be an ADA amount (0 is fine).");
+  return p;
 }

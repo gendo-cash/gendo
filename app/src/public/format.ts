@@ -22,13 +22,35 @@ export function allowanceSentence(a: AllowanceView): string {
   const l = a.caps.find((c) => c.unit === "lovelace");
   const n = a.payees.length;
   const limits = l ? `up to ${ada(l.perPayment)} ADA at a time and ${ada(l.perPeriod)} ADA per ${periodName(a.periodMs!)}` : "nothing (no ADA limit is set)";
-  return `This agent can pay ${limits}, only to ${n === 1 ? "this address" : `these ${n} addresses`}, until ${date(a.expiresAt!)}.`;
+  const apps = (a.apps ?? []).map((x) => (x === "minswap" ? "Minswap" : x));
+  const trades = apps.length ? ` It may also swap on ${apps.join(" and ")}, within the same limits.` : "";
+  return `This agent can pay ${limits}, only to ${n === 1 ? "this address" : `these ${n} addresses`}, until ${date(a.expiresAt!)}.${trades}`;
 }
 
 const signedAda = (lovelace: bigint) => `${lovelace < 0n ? "-" : "+"}${ada(lovelace < 0n ? -lovelace : lovelace)}`;
 
+/** A token's readable name from its unit: the asset name as text (CIP-68 label dropped), else a short id. */
+export function tokenName(unit: string): string {
+  if (unit === "lovelace") return "ADA";
+  let hex = unit.slice(56);
+  if (/^(000643b0|000de140|0014df10)/.test(hex)) hex = hex.slice(8);
+  const bytes = hex.match(/../g)?.map((b) => parseInt(b, 16)) ?? [];
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
+  return bytes.length && /^[\x20-\x7e]+$/.test(text) ? text : `${unit.slice(0, 8)}…${unit.slice(-4)}`;
+}
+
+/** An amount of a unit as people read it: ADA in ADA, tokens as raw quantities with their name. */
+export const amountOf = (unit: string, q: bigint) => (unit === "lovelace" ? `${ada(q)} ADA` : `${q} ${tokenName(unit)}`);
+
 /** One history row, from what the chain says (the redeemer, outputs and fee), never from the agent's note. */
 export function paymentLine(p: PaymentView): string {
+  if (p.kind === "trade" && p.trade) {
+    const t = p.trade;
+    const head = `Swap ${amountOf(t.sells, t.amountIn)} for at least ${amountOf(t.buys, t.minimumReceive)} on Minswap (${t.pool})`;
+    if (t.status === "filled") return `${head}, filled: ${amountOf(t.buys, t.received?.[t.buys] ?? 0n)} to the treasury`;
+    if (t.status === "refunded") return `${head}, refunded: ${amountOf(t.sells, t.received?.[t.sells] ?? 0n)} to the treasury`;
+    return `${head}, ${t.status === "pending" ? "waiting for a batcher" : "status unknown"}`;
+  }
   if (p.kind === "owner") return `Owner change: allowance ${signedAda(p.allowanceDelta)} ADA`;
   if (p.kind === "unknown") return `Allowance ${signedAda(p.allowanceDelta)} ADA`;
   const paid = p.payees.reduce((n, x) => n + x.lovelace, 0n);

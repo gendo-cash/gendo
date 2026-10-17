@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeVault } from "../../sdk/src/core/index.ts";
-import { consistentVaults, sidebarVaults } from "../src/owner/vaults.ts";
+import { consistentVaults, sidebarVaults, staleCount } from "../src/owner/vaults.ts";
 
 describe("your vault list", () => {
   it("drops an entry whose vault id isn't the vault the policy names", () => {
@@ -22,4 +22,14 @@ describe("the sidebar's vaults", () => {
     expect(sidebarVaults(list, {}, "p2").map((x) => x.name)).toEqual(["V1", "V2", "V3", "V4", "V5"]);
   });
   it("fewer than five shows them all", () => expect(sidebarVaults(list.slice(0, 2), {})).toHaveLength(2));
+});
+
+describe("vaults from before an update", () => {
+  it("counts the saved vaults whose ids no longer derive their address", () => {
+    const a = makeVault("Preprod", { txHash: "aa".repeat(32), outputIndex: 0 });
+    const ok = { policy: a.hash, vaultId: `gendo:preprod:${"aa".repeat(32)}#0`, name: "A", listed: false };
+    const old = { policy: "ff".repeat(28), vaultId: `gendo:preprod:${"bb".repeat(32)}#0`, name: "Old", listed: false };
+    expect(staleCount([ok, old, old])).toBe(2);
+    expect(staleCount([ok])).toBe(0);
+  });
 });

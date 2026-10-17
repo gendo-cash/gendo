@@ -102,6 +102,7 @@ const ICONS: Record<string, string> = {
   activity: "M2.5 10h3.5l2-5 4 10 2-5h3.5",
   treasury: "M3 7.5l7-4 7 4M4.5 8.5v6M8.5 8.5v6M11.5 8.5v6M15.5 8.5v6M3 16.5h14",
   settings: "M3.5 6h8M15.5 6h1M3.5 14h1M8.5 14h8M13.5 4v4M6.5 12v4",
+  apps: "M7 2.5v4M13 2.5v4M4.5 6.5h11v3a5.5 5.5 0 0 1-11 0zM10 15v2.5",
   public: "M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM2.5 10h15M10 2.5c2 2 3 4.5 3 7.5s-1 5.5-3 7.5c-2-2-3-4.5-3-7.5s1-5.5 3-7.5z",
   all: "M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z",
   create: "M10 4v12M4 10h12",
@@ -110,7 +111,7 @@ const ICONS: Record<string, string> = {
 const Icon = ({ name, size = 16 }: { name: keyof typeof ICONS; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}><path d={ICONS[name]} /></svg>
 );
-const TAB_ICON = { agents: "agents", activity: "activity", treasury: "treasury", settings: "settings" } as const;
+const TAB_ICON = { agents: "agents", activity: "activity", treasury: "treasury", apps: "apps", settings: "settings" } as const;
 
 export function Shell({ policy, tab, title, actions, children }: { policy?: string; tab?: string; title: ReactNode; actions?: ReactNode; children: ReactNode }) {
   const o = useOwner();
@@ -156,7 +157,7 @@ export function Shell({ policy, tab, title, actions, children }: { policy?: stri
               {nav(`/v/${v.policy}`, <><Avatar id={v.policy} kind="vault" size={24} /><span className="vname">{v.name ?? "Unnamed vault"}</span></>, false, count(o.needYou[v.policy]), "nav vhead")}
               {v.policy === policy && (
                 <div className="subnav">
-                  {(["agents", "activity", "treasury", "settings"] as const).map((t) => nav(`/v/${policy}/${t}`, <><Icon name={TAB_ICON[t]} />{t[0]!.toUpperCase() + t.slice(1)}</>, tab === t))}
+                  {(["agents", "activity", "treasury", "apps", "settings"] as const).map((t) => nav(`/v/${policy}/${t}`, <><Icon name={TAB_ICON[t]} />{t[0]!.toUpperCase() + t.slice(1)}</>, tab === t))}
                   <a className="nav" href={`/w/${policy}`}><Icon name="public" />Public page</a>
                 </div>
               )}

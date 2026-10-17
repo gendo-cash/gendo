@@ -23,7 +23,7 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
     const [cfg, al, listing] = await Promise.all([readConfig(o.lucid, vault), unit ? readAllowance(o.lucid, vault, unit) : Promise.resolve(undefined), api.listing(policy)]);
     return { cfg: cfg.config, al: al?.datum, labels: listing?.agents ?? {} };
   }, [policy, unit, mine?.vaultId]);
-  const [f, setF] = useState<AgentForm>({ name: "", agentKey: "", perPayment: "10", budget: "25", period: "day", payees: [], expires: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10), fund: "40" });
+  const [f, setF] = useState<AgentForm>({ name: "", agentKey: "", perPayment: "10", budget: "25", period: "day", payees: [], expires: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10), fund: "40", apps: [] });
   const [newPayee, setNewPayee] = useState("");
   const [signers, setSigners] = useState<string[]>([o.me.pkh]);
   const [busy, setBusy] = useState<string>();
@@ -50,7 +50,7 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
       setF({
         name: unit ? d.labels[unit] ?? "" : "", agentKey: d.al.agent,
         perPayment: c ? String(Number(c.txCap) / 1e6) : "0", budget: c ? String(Number(c.windowCap) / 1e6) : "0", period: periodOf(d.al.periodMs),
-        payees: d.al.destinations.map((a) => fromPlutusAddress(o.net, a)), expires: new Date(Number(d.al.expiresAt)).toISOString().slice(0, 10), fund: "0",
+        payees: d.al.destinations.map((a) => fromPlutusAddress(o.net, a)), expires: new Date(Number(d.al.expiresAt)).toISOString().slice(0, 10), fund: "0", apps: d.al.apps,
       });
     }
   }, [loaded.data]);
@@ -74,7 +74,7 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
     const sameDay = new Date(Number(d.al.expiresAt)).toISOString().slice(0, 10) === f.expires;
     return editedDatum(
       d.al,
-      { perPayment: toLovelace(f.perPayment)!, budget: toLovelace(f.budget)!, period: periodTouched ? PERIOD_MS[f.period] : undefined, payees: f.payees, expiresAt: sameDay ? d.al.expiresAt : expiresAt },
+      { perPayment: toLovelace(f.perPayment)!, budget: toLovelace(f.budget)!, period: periodTouched ? PERIOD_MS[f.period] : undefined, payees: f.payees, expiresAt: sameDay ? d.al.expiresAt : expiresAt, apps: f.apps },
       (a) => toPlutusAddress(a, o.net),
     );
   };
@@ -117,7 +117,7 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
       const now = BigInt(o.lucid.slotToUnixTime(o.lucid.currentSlot()));
       const grant = {
         agent: f.agentKey, destinations: f.payees, caps: [{ policy: "", name: "", windowCap: toLovelace(f.budget)!, txCap: toLovelace(f.perPayment)! }],
-        periodMs: PERIOD_MS[f.period], windowStart: now - 120_000n, expiresAt, maxFee: 2_000_000n, fund: { lovelace: toLovelace(f.fund)! },
+        periodMs: PERIOD_MS[f.period], windowStart: now - 120_000n, expiresAt, maxFee: 2_000_000n, fund: { lovelace: toLovelace(f.fund)! }, apps: f.apps,
         // A paired agent's own address starts empty; it needs a little ADA there as collateral.
         ...(pairing.data?.agent ? { collateral: 5_000_000n } : {}),
       };
@@ -166,6 +166,18 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
             </div>
           ), "The agent can't pay any address not on this list.")}
           {field("exp", "Expires", <input id="exp" type="date" value={f.expires} onChange={set("expires")} />, "After this date the agent can't pay at all.")}
+          {field("apps", "Apps it may use", (
+            d?.cfg.apps.length ? (
+              <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {d.cfg.apps.map((a) => (
+                  <label key={a.name} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input type="checkbox" checked={f.apps.includes(a.name)} onChange={(e) => setF({ ...f, apps: e.target.checked ? [...f.apps, a.name] : f.apps.filter((x) => x !== a.name) })} />
+                    {a.name === "minswap" ? "Minswap: swap within this budget" : a.name}
+                  </label>
+                ))}
+              </span>
+            ) : <span className="faint">No apps enabled on this vault. <Link to={`/v/${policy}/apps`}>Enable one</Link> first.</span>
+          ), "A swap spends its amount plus Minswap's 2 ADA deposit, the batcher fee and the cancel tip from this budget. What comes back goes to the treasury, not to the agent.")}
           {!unit && field("fund", "Fund from the treasury", <><input id="fund" value={f.fund} onChange={set("fund")} style={{ width: 120 }} /> <span className="faint">ADA</span></>)}
           {d && (
             <div style={{ padding: 14 }}>
