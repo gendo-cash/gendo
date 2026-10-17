@@ -155,6 +155,8 @@ export type Grant = {
   expiresAt: bigint;
   maxFee: bigint;
   fund: Assets;
+  /** Names of the vault's enabled apps this agent may trade with. */
+  apps?: string[];
 };
 
 export function grantDatum(g: Grant, network?: Parameters<typeof toPlutusAddress>[1]): AllowanceDatum {
@@ -167,6 +169,7 @@ export function grantDatum(g: Grant, network?: Parameters<typeof toPlutusAddress
     periodMs: g.periodMs,
     expiresAt: g.expiresAt,
     maxFee: g.maxFee,
+    apps: g.apps ?? [],
   };
 }
 

@@ -116,6 +116,7 @@ export function createConfig(f: CreateForm, me: string, net: "Preprod" | "Custom
     threshold: BigInt(f.threshold),
     paused: false,
     maxTxValidityMs: BigInt(Number(f.windowMin) * 60_000),
+    apps: [],
   };
 }
 

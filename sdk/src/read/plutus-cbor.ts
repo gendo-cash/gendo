@@ -125,3 +125,45 @@ export function asList(d: PData): PData[] {
   if (d.k !== "list") throw new Error("expected a list");
   return d.items;
 }
+
+function encHead(major: number, n: bigint): string {
+  const m = major << 5;
+  if (n < 24n) return (m | Number(n)).toString(16).padStart(2, "0");
+  for (const [ai, width] of [[24, 1], [25, 2], [26, 4], [27, 8]] as const)
+    if (n < 1n << BigInt(8 * width)) return (m | ai).toString(16).padStart(2, "0") + n.toString(16).padStart(2 * width, "0");
+  throw new Error("plutus data: length too large");
+}
+
+function encBytes(hex: string): string {
+  // Plutus caps a bytes chunk at 64 bytes: longer strings go as an indefinite sequence of chunks.
+  if (hex.length <= 128) return encHead(2, BigInt(hex.length / 2)) + hex;
+  let out = "5f";
+  for (let i = 0; i < hex.length; i += 128) out += encHead(2, BigInt(Math.min(128, hex.length - i) / 2)) + hex.slice(i, i + 128);
+  return out + "ff";
+}
+
+/** Plutus data back to CBOR hex (definite lengths): for handing a datum's piece on, e.g. an app's settings. */
+export function encodePlutusData(d: PData): string {
+  switch (d.k) {
+    case "int": {
+      if (d.v >= 0n && d.v < 1n << 64n) return encHead(0, d.v);
+      if (d.v < 0n && -1n - d.v < 1n << 64n) return encHead(1, -1n - d.v);
+      const n = d.v >= 0n ? d.v : -1n - d.v;
+      let hex = n.toString(16);
+      if (hex.length % 2) hex = "0" + hex;
+      return (d.v >= 0n ? "c2" : "c3") + encBytes(hex);
+    }
+    case "bytes":
+      return encBytes(d.hex);
+    case "list":
+      return encHead(4, BigInt(d.items.length)) + d.items.map(encodePlutusData).join("");
+    case "map":
+      return encHead(5, BigInt(d.entries.length)) + d.entries.map(([k, v]) => encodePlutusData(k) + encodePlutusData(v)).join("");
+    case "constr": {
+      const fields = encHead(4, BigInt(d.fields.length)) + d.fields.map(encodePlutusData).join("");
+      if (d.index < 7) return encHead(6, BigInt(121 + d.index)) + fields;
+      if (d.index < 128) return encHead(6, BigInt(1280 + d.index - 7)) + fields;
+      return encHead(6, 102n) + "82" + encHead(0, BigInt(d.index)) + fields;
+    }
+  }
+}

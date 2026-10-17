@@ -9,7 +9,7 @@ describe("a grant that sends the agent its collateral", () => {
     const w = await emulatorWorld();
     const { lucid, emulator } = w;
     lucid.selectWallet.fromPrivateKey(w.a.privateKey);
-    const created = await owner.createVault(lucid, { owners: [w.a.pkh], threshold: 1n, paused: false, maxTxValidityMs: 3_600_000n });
+    const created = await owner.createVault(lucid, { owners: [w.a.pkh], threshold: 1n, paused: false, maxTxValidityMs: 3_600_000n, apps: [] });
     await signAndSubmit(lucid, emulator, created.tx, [w.a]);
     await signAndSubmit(lucid, emulator, await owner.fundTreasury(lucid, created.vault, { lovelace: 100n * ADA }), [w.a]);
     const fresh = "ab".repeat(28); // a key with no ADA yet

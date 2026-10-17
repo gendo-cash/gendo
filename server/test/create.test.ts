@@ -32,7 +32,7 @@ async function setup(o: { submit?: (cbor: string) => Promise<Submit>; landed?: (
   const call = async (method: string, path: string, token: string, body?: unknown) =>
     app.request(path, { method, headers: json({ authorization: `Bearer ${token}` }), ...(body ? { body: JSON.stringify(body) } : {}) });
   const create = async (ownersOf: string[], signer = A!.pkh, by = A!) => {
-    const { tx, vault } = await owner.createVault(lucid, { owners: ownersOf, threshold: 1n, paused: false, maxTxValidityMs: 120_000n },
+    const { tx, vault } = await owner.createVault(lucid, { owners: ownersOf, threshold: 1n, paused: false, maxTxValidityMs: 120_000n, apps: [] },
       { refScriptAddress: refHolderAddress("Custom"), fund: 5_000_000n, signer });
     const cbor = tx.toCBOR();
     return { cbor, vault, wit: await witness(lucid, cbor, by.sk) };

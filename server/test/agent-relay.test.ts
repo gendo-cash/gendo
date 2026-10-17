@@ -19,7 +19,7 @@ describe("an agent connected by pairing", async () => {
   const emulator = new Emulator([a, agent, other, payee]);
   const lucid = await Lucid(emulator, "Custom");
   lucid.selectWallet.fromPrivateKey(a.privateKey);
-  const created = await owner.createVault(lucid, { owners: [a.pkh], threshold: 1n, paused: false, maxTxValidityMs: HOUR });
+  const created = await owner.createVault(lucid, { owners: [a.pkh], threshold: 1n, paused: false, maxTxValidityMs: HOUR, apps: [] });
   const vault = created.vault;
   await signAndSubmit(lucid, emulator, created.tx, [a]);
   await signAndSubmit(lucid, emulator, await owner.fundTreasury(lucid, vault, { lovelace: 300n * ADA }), [a]);

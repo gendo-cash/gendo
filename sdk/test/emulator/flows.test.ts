@@ -50,7 +50,7 @@ beforeAll(async () => {
     owners: [w.a.pkh, w.b.pkh, w.c.pkh],
     threshold: 2n,
     paused: false,
-    maxTxValidityMs: HOUR,
+    maxTxValidityMs: HOUR, apps: [],
   });
   vault = created.vault;
   await signAndSubmit(lucid, emulator, created.tx, [w.a]);
@@ -273,7 +273,7 @@ describe("vault lifecycle (emulator)", () => {
 
   it("window cap accumulates across txs and blocks the overflow", async () => {
     const ctx = await agentCtx();
-    const b1 = await buildAgentSpend({ ...ctx, payments: [{ to: w.payee2.address, assets: { lovelace: 9n * ADA } }], intentId: crypto.randomUUID(), purpose: "2" });
+    const b1 = await buildAgentSpend({ ...ctx, payments: [{ to: w.payee2.address, assets: { lovelace: 8n * ADA } }], intentId: crypto.randomUUID(), purpose: "2" });
     await signAndSubmit(lucid, emulator, b1.tx, [w.agent]);
     const ctx2 = await agentCtx();
     await expect(

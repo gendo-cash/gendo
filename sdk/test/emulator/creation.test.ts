@@ -11,7 +11,7 @@ import { blindEvaluator } from "../yaci/attacker.js"; // builds without running 
 
 let w: Awaited<ReturnType<typeof emulatorWorld>>;
 let lucid: LucidEvolution;
-const init = () => ({ owners: [w.a.pkh, w.b.pkh], threshold: 2n, paused: false, maxTxValidityMs: 600_000n });
+const init = () => ({ owners: [w.a.pkh, w.b.pkh], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] });
 
 beforeAll(async () => {
   w = await emulatorWorld();

@@ -4,15 +4,25 @@
 import { bech32 } from "@scure/base";
 import type { AllowanceDatum, ConfigDatum, Credential, PlutusAddress } from "../core/data.js";
 import { fromHex } from "../core/bytes.js";
-import { asBytes, asConstr, asInt, asList, decodePlutusData, type PData } from "./plutus-cbor.js";
+import { asBytes, asConstr, asInt, asList, decodePlutusData, encodePlutusData, type PData } from "./plutus-cbor.js";
+import { hexToUtf8 } from "../core/bytes.js";
 
 export type ReadNetwork = "Preprod" | "Preview" | "Custom";
 
 export function configFromCbor(hex: string): ConfigDatum {
-  const [owners, threshold, paused, maxTx] = asConstr(decodePlutusData(hex), 0, 4);
+  const [owners, threshold, paused, maxTx, apps] = asConstr(decodePlutusData(hex), 0, 5);
   const p = paused!;
   if (p.k !== "constr" || p.fields.length !== 0 || p.index > 1) throw new Error("bad Bool");
-  return { owners: asList(owners!).map(asBytes), threshold: asInt(threshold!), paused: p.index === 1, maxTxValidityMs: asInt(maxTx!) };
+  return {
+    owners: asList(owners!).map(asBytes),
+    threshold: asInt(threshold!),
+    paused: p.index === 1,
+    maxTxValidityMs: asInt(maxTx!),
+    apps: asList(apps!).map((a) => {
+      const [name, adapter, orderScript, settings] = asConstr(a, 0, 4);
+      return { name: hexToUtf8(asBytes(name!)), adapter: asBytes(adapter!), orderScript: asBytes(orderScript!), settings: encodePlutusData(settings!) };
+    }),
+  };
 }
 
 const credential = (d: PData): Credential => {
@@ -35,7 +45,7 @@ function address(d: PData): PlutusAddress {
 }
 
 export function allowanceFromCbor(hex: string): AllowanceDatum {
-  const [agent, dests, caps, spent, ws, period, exp, maxFee] = asConstr(decodePlutusData(hex), 0, 8);
+  const [agent, dests, caps, spent, ws, period, exp, maxFee, apps] = asConstr(decodePlutusData(hex), 0, 9);
   return {
     agent: asBytes(agent!),
     destinations: asList(dests!).map(address),
@@ -48,6 +58,7 @@ export function allowanceFromCbor(hex: string): AllowanceDatum {
     periodMs: asInt(period!),
     expiresAt: asInt(exp!),
     maxFee: asInt(maxFee!),
+    apps: asList(apps!).map((n) => hexToUtf8(asBytes(n))),
   };
 }
 

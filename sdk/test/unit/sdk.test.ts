@@ -24,6 +24,7 @@ const base: AllowanceDatum = {
   periodMs: 100n,
   expiresAt: 100_000n,
   maxFee: 5n,
+  apps: [],
 };
 
 describe("data encoding", () => {
@@ -31,7 +32,7 @@ describe("data encoding", () => {
     expect(allowanceFromData(allowanceToData(base))).toEqual(base);
   });
   it("config round-trips and Bool uses Aiken's constructor order", () => {
-    const c = { owners: [k(1), k(2)], threshold: 2n, paused: true, maxTxValidityMs: 10n };
+    const c = { owners: [k(1), k(2)], threshold: 2n, paused: true, maxTxValidityMs: 10n, apps: [] };
     expect(configFromData(configToData(c))).toEqual(c);
     expect(Data.to(addressToData({ payment: { type: "Key", hash: k(9) }, stake: null }))).toContain("d87a80"); // None = Constr 1 []
   });
@@ -58,7 +59,7 @@ describe("limits mirror", () => {
     expect(wellFormedProblems({ ...base, caps: [{ policy: "", name: "", windowCap: 50n, txCap: 51n }] })).toContain(capOut);
     expect(wellFormedProblems({ ...base, caps: [{ policy: "", name: "", windowCap: 50n, txCap: 50n }] })).toEqual([]);
   });
-  const cfg = { owners: [k(7)], threshold: 1n, paused: false, maxTxValidityMs: 50n };
+  const cfg = { owners: [k(7)], threshold: 1n, paused: false, maxTxValidityMs: 50n, apps: [] };
   const args = { datum: base, config: cfg, fee: 1n, lower: 1010n, upper: 1020n, payTo: base.destinations };
   it("computes the next datum, rolling the window", () => {
     expect(nextAllowance({ ...args, delta: { lovelace: 10n } }).spent).toEqual([10n]);
@@ -204,7 +205,7 @@ describe("signer policy", () => {
 });
 
 describe("config changes (mirror of owner_manage)", () => {
-  const cfg = { owners: [k(10), k(11), k(12)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n };
+  const cfg = { owners: [k(10), k(11), k(12)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] };
   it("the threshold may make any valid change", () => {
     expect(configChangeProblems(cfg, { ...cfg, threshold: 3n }, [k(10), k(11)])).toEqual([]);
   });

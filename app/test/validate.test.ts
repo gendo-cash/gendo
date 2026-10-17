@@ -41,7 +41,7 @@ describe("create a vault", () => {
   });
   it("a sound form has no problems and makes the config", () => {
     expect(createProblems(f(), { me, net: "Preprod" })).toEqual([]);
-    expect(createConfig(f(), me, "Preprod")).toEqual({ owners: [me, b], threshold: 2n, paused: false, maxTxValidityMs: 600_000n });
+    expect(createConfig(f(), me, "Preprod")).toEqual({ owners: [me, b], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] });
   });
   it("says what's wrong in plain words", () => {
     expect(createProblems(f({ name: " " }), { me, net: "Preprod" })).toContain("Name the vault.");

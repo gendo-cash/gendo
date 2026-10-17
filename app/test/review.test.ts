@@ -6,7 +6,7 @@ import { editedDatum } from "../src/owner/validate.ts";
 const h = (n: number) => n.toString(16).padStart(2, "0").repeat(28);
 const U = h(5) + "01";
 const ex = (changes: Explanation["changes"]): Explanation => ({ hash: "", requiredSigners: [], changes, leavesVault: {}, flows: [], collateralAtRisk: [], fee: 0n, warnings: [] });
-const cfg = { owners: [h(1)], threshold: 1n, paused: false, maxTxValidityMs: 1n };
+const cfg = { owners: [h(1)], threshold: 1n, paused: false, maxTxValidityMs: 1n, apps: [] };
 
 describe("rebuild only what the item was", () => {
   it("matches op and unit to what the dead tx changed", () => {
@@ -23,7 +23,7 @@ describe("rebuild only what the item was", () => {
 
 describe("editing keeps what the form doesn't show", () => {
   const al: AllowanceDatum = {
-    agent: h(9), destinations: [], windowStart: 0n, periodMs: 172_800_000n, expiresAt: 10n, maxFee: 1n,
+    agent: h(9), destinations: [], windowStart: 0n, periodMs: 172_800_000n, expiresAt: 10n, maxFee: 1n, apps: [],
     caps: [{ policy: h(7), name: "74", windowCap: 100n, txCap: 10n }, { policy: "", name: "", windowCap: 25n, txCap: 10n }],
     spent: [40n, 3n],
   };

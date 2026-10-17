@@ -2,6 +2,7 @@
 // Hand-written (not schema-generated) so an auditor can check each constructor
 // index against the Aiken source side by side.
 import { Constr, Data } from "@lucid-evolution/lucid";
+import { hexToUtf8, utf8ToHex } from "./bytes.js";
 
 export type Hex = string;
 
@@ -12,11 +13,15 @@ export type PlutusAddress = {
   stake: Credential | { pointer: [bigint, bigint, bigint] } | null;
 };
 
+/** One DeFi app a vault has enabled. `settings` is the app's own Plutus data as CBOR hex (decoded by its SDK module). */
+export type AppConfig = { name: string; adapter: Hex; orderScript: Hex; settings: string };
+
 export type ConfigDatum = {
   owners: Hex[];
   threshold: bigint;
   paused: boolean;
   maxTxValidityMs: bigint;
+  apps: AppConfig[];
 };
 
 export type AssetCap = { policy: Hex; name: Hex; windowCap: bigint; txCap: bigint };
@@ -30,12 +35,15 @@ export type AllowanceDatum = {
   periodMs: bigint;
   expiresAt: bigint;
   maxFee: bigint;
+  /** Names of the vault's apps this agent may trade with. */
+  apps: string[];
 };
 
 export type SpendRedeemer =
   | { kind: "AgentSpend"; intentHash: Hex }
   | { kind: "CoSignedSpend"; intentHash: Hex }
-  | { kind: "OwnerManage" };
+  | { kind: "OwnerManage" }
+  | { kind: "AgentTrade"; intentHash: Hex };
 
 export type MintRedeemer = "InitConfig" | "ManageAllowances";
 
@@ -78,18 +86,27 @@ export function addressFromData(d: Data): PlutusAddress {
 
 // --- datums -----------------------------------------------------------------
 
+const appToData = (a: AppConfig) => new Constr(0, [utf8ToHex(a.name), a.adapter, a.orderScript, Data.from(a.settings)]);
+
 export function configToData(c: ConfigDatum): string {
-  return Data.to(new Constr(0, [c.owners, c.threshold, bool(c.paused), c.maxTxValidityMs]));
+  return Data.to(new Constr(0, [c.owners, c.threshold, bool(c.paused), c.maxTxValidityMs, c.apps.map(appToData)]));
 }
 
 export function configFromData(cbor: string): ConfigDatum {
   const c = Data.from(cbor) as Constr<Data>;
-  const [owners, threshold, paused, maxTx] = c.fields;
+  if (!(c instanceof Constr) || c.index !== 0 || c.fields.length !== 5) throw new Error("not a ConfigDatum");
+  const [owners, threshold, paused, maxTx, apps] = c.fields;
   return {
     owners: owners as string[],
     threshold: threshold as bigint,
     paused: (paused as Constr<Data>).index === 1,
     maxTxValidityMs: maxTx as bigint,
+    apps: (apps as Constr<Data>[]).map((a) => ({
+      name: hexToUtf8(a.fields[0] as string),
+      adapter: a.fields[1] as string,
+      orderScript: a.fields[2] as string,
+      settings: Data.to(a.fields[3]!),
+    })),
   };
 }
 
@@ -105,6 +122,7 @@ export function allowanceToPlutus(a: AllowanceDatum): Constr<Data> {
     a.periodMs,
     a.expiresAt,
     a.maxFee,
+    a.apps.map(utf8ToHex),
   ]);
 }
 
@@ -115,9 +133,9 @@ export function allowanceToData(a: AllowanceDatum): string {
 /** Throws on anything that is not a well-typed AllowanceDatum. */
 export function allowanceFromData(cbor: string): AllowanceDatum {
   const c = Data.from(cbor) as Constr<Data>;
-  if (!(c instanceof Constr) || c.index !== 0 || c.fields.length !== 8)
+  if (!(c instanceof Constr) || c.index !== 0 || c.fields.length !== 9)
     throw new Error("not an AllowanceDatum");
-  const [agent, dests, caps, spent, ws, period, exp, maxFee] = c.fields;
+  const [agent, dests, caps, spent, ws, period, exp, maxFee, apps] = c.fields;
   return {
     agent: agent as string,
     destinations: (dests as Data[]).map(addressFromData),
@@ -132,6 +150,7 @@ export function allowanceFromData(cbor: string): AllowanceDatum {
     periodMs: period as bigint,
     expiresAt: exp as bigint,
     maxFee: maxFee as bigint,
+    apps: (apps as string[]).map(hexToUtf8),
   };
 }
 
@@ -145,6 +164,8 @@ export function spendRedeemer(r: SpendRedeemer): string {
       return Data.to(new Constr(1, [r.intentHash]));
     case "OwnerManage":
       return Data.to(new Constr(2, []));
+    case "AgentTrade":
+      return Data.to(new Constr(3, [r.intentHash]));
   }
 }
 

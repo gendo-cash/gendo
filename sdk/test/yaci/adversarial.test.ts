@@ -261,7 +261,7 @@ describe("config, roles, signatures", () => {
       .attach.MintingPolicy(policy)
       .pay.ToContract(
         w.vault.address,
-        { kind: "inline", value: configToData({ owners: [w.stranger.pkh], threshold: 1n, paused: false, maxTxValidityMs: 120_000n }) },
+        { kind: "inline", value: configToData({ owners: [w.stranger.pkh], threshold: 1n, paused: false, maxTxValidityMs: 120_000n, apps: [] }) },
         { lovelace: 3n * ADA, [tok]: 1n },
       )
       .complete();

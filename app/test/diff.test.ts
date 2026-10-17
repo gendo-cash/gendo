@@ -9,7 +9,7 @@ const al = (txCap: bigint, windowCap: bigint, payees = 3): AllowanceDatum => ({
   agent: h(9),
   destinations: Array.from({ length: payees }, (_, i) => ({ payment: { type: "Key", hash: h(20 + i) }, stake: null })),
   caps: [{ policy: "", name: "", windowCap, txCap }],
-  spent: [0n], windowStart: 1_790_000_000_000n, periodMs: 86_400_000n, expiresAt: BigInt(Date.UTC(2026, 10, 30)), maxFee: 2_000_000n,
+  spent: [0n], windowStart: 1_790_000_000_000n, periodMs: 86_400_000n, expiresAt: BigInt(Date.UTC(2026, 10, 30)), maxFee: 2_000_000n, apps: [],
 });
 const base: Omit<Explanation, "changes"> = { hash: "aa".repeat(32), requiredSigners: [h(1), h(2)], changes: [] as never, leavesVault: {}, flows: [], collateralAtRisk: [], fee: 300_000n, warnings: [] } as never;
 const ctx = { viewer: h(1), vaultAddress: "addr_test1wvault", labels: { [h(5) + "01"]: "payout-bot" }, payeesOf: (d: AllowanceDatum) => d.destinations.map((_, i) => `addr_test1q${i}`), isMine: () => false, short: (s: string) => s.slice(0, 10) };
@@ -23,12 +23,12 @@ describe("detailOf", () => {
     expect(d.after).toContain("40 ADA per day");
   });
   it("a pause and an unpause", () => {
-    const c = { owners: [h(1), h(2)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n };
+    const c = { owners: [h(1), h(2)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] };
     expect(detailOf({ ...base, changes: [{ kind: "config", before: c, after: { ...c, paused: true } }] }, ctx).title).toBe("Pause all agents");
     expect(detailOf({ ...base, changes: [{ kind: "config", before: { ...c, paused: true }, after: c }] }, ctx).title).toBe("Unpause");
   });
   it("an owner change lists who is added and removed", () => {
-    const c = { owners: [h(1), h(2), h(3)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n };
+    const c = { owners: [h(1), h(2), h(3)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] };
     const d = detailOf({ ...base, changes: [{ kind: "config", before: c, after: { ...c, owners: [h(1), h(2), h(4)] } }] }, ctx);
     expect(d.title).toBe("Change owners or threshold");
     expect(d.rows).toContainEqual({ k: "Owner added", now: "—", next: h(4), changed: true });
@@ -71,7 +71,7 @@ describe("detailOf", () => {
   });
   it("sentence matches the public page's", () => expect(sentence(al(10_000_000n, 25_000_000n, 1), 1)).toBe("This agent can pay up to 10 ADA at a time and 25 ADA per day, only to this address, until 2026-11-30."));
   it("a creation: its owners and threshold, the reference script named, money into the vault", () => {
-    const c = { owners: [h(1), h(2)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n };
+    const c = { owners: [h(1), h(2)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] };
     const d = detailOf({ ...base, changes: [{ kind: "config", before: null, after: c, deposit: 2_000_000n }],
       flows: [{ address: "addr_test1wvault", delta: { lovelace: 22_000_000n } }, { address: "addr_test1wholder", delta: { lovelace: 27_000_000n } }] }, { ...ctx, refHolder: "addr_test1wholder" });
     expect(d.title).toBe("Create this vault");

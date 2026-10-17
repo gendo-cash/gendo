@@ -256,7 +256,7 @@ const commands: Record<string, (argv: string[]) => Promise<void>> = {
     lucid.selectWallet.fromPrivateKey(payer.privateKey);
     const { tx, vault } = await owner.createVault(
       lucid,
-      { owners: list(v.owners).map(pkhOf), threshold: BigInt(v.threshold ?? die("--threshold required")), paused: false, maxTxValidityMs: duration(v["max-validity"]!) },
+      { owners: list(v.owners).map(pkhOf), threshold: BigInt(v.threshold ?? die("--threshold required")), paused: false, maxTxValidityMs: duration(v["max-validity"]!), apps: [] },
       { refScriptAddress: refHolderAddress(lucid.config().network!) },
     );
     const signedTx = await tx.sign.withWallet().complete();

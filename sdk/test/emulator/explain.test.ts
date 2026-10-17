@@ -31,7 +31,7 @@ beforeAll(async () => {
   w = await emulatorWorld();
   ({ lucid, emulator } = w);
   lucid.selectWallet.fromPrivateKey(w.a.privateKey);
-  const created = await owner.createVault(lucid, { owners: [w.a.pkh, w.b.pkh, w.c.pkh], threshold: 2n, paused: false, maxTxValidityMs: HOUR });
+  const created = await owner.createVault(lucid, { owners: [w.a.pkh, w.b.pkh, w.c.pkh], threshold: 2n, paused: false, maxTxValidityMs: HOUR, apps: [] });
   vault = created.vault;
   await signAndSubmit(lucid, emulator, created.tx, [w.a]);
   await signAndSubmit(lucid, emulator, await owner.fundTreasury(lucid, vault, { lovelace: 500n * ADA }), [w.a]);
@@ -69,7 +69,7 @@ describe("explainTx", () => {
 
   it("a creation: the new config and the ADA held with it, apart from the treasury deposit", async () => {
     lucid.selectWallet.fromPrivateKey(w.a.privateKey);
-    const init = { owners: [w.a.pkh, w.b.pkh], threshold: 2n, paused: false, maxTxValidityMs: HOUR };
+    const init = { owners: [w.a.pkh, w.b.pkh], threshold: 2n, paused: false, maxTxValidityMs: HOUR, apps: [] };
     const { tx, vault: v } = await owner.createVault(lucid, init, { fund: 20n * ADA, signer: w.a.pkh });
     const cbor = tx.toCBOR();
     const e = explainTx(cbor, v, await inputsOf(cbor), { viewer: w.a.pkh });

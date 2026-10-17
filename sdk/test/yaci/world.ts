@@ -244,7 +244,7 @@ export async function yaciWorld(opts: { maxTxValidityMs?: bigint } = {}) {
       owners: [a.pkh, b.pkh, c.pkh],
       threshold: 2n,
       paused: false,
-      maxTxValidityMs: opts.maxTxValidityMs ?? MAX_VALIDITY_MS,
+      maxTxValidityMs: opts.maxTxValidityMs ?? MAX_VALIDITY_MS, apps: [],
     },
     { refScriptAddress: refHolder },
   ));

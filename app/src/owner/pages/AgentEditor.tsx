@@ -80,7 +80,7 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
   };
   const next = draft();
   const live = sentence(
-    { agent: f.agentKey, destinations: f.payees.map(() => ({ payment: { type: "Key", hash: "" }, stake: null })), caps: [{ policy: "", name: "", windowCap: toLovelace(f.budget) ?? 0n, txCap: toLovelace(f.perPayment) ?? 0n }], spent: [0n], windowStart: 0n, periodMs: PERIOD_MS[f.period], expiresAt, maxFee: 0n },
+    { agent: f.agentKey, destinations: f.payees.map(() => ({ payment: { type: "Key", hash: "" }, stake: null })), caps: [{ policy: "", name: "", windowCap: toLovelace(f.budget) ?? 0n, txCap: toLovelace(f.perPayment) ?? 0n }], spent: [0n], windowStart: 0n, periodMs: PERIOD_MS[f.period], expiresAt, maxFee: 0n, apps: [] },
     f.payees.length,
   );
   const propose = async (r: Recipe, done: string) => {

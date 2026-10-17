@@ -14,7 +14,7 @@ describe("signer TTL caps", async () => {
   const { lucid, emulator } = w;
   const HOUR = 3_600_000n;
   lucid.selectWallet.fromPrivateKey(w.a.privateKey);
-  const created = await owner.createVault(lucid, { owners: [w.a.pkh, w.b.pkh], threshold: 2n, paused: false, maxTxValidityMs: HOUR });
+  const created = await owner.createVault(lucid, { owners: [w.a.pkh, w.b.pkh], threshold: 2n, paused: false, maxTxValidityMs: HOUR, apps: [] });
   const vault = created.vault;
   await signAndSubmit(lucid, emulator, created.tx, [w.a]);
   await signAndSubmit(lucid, emulator, await owner.fundTreasury(lucid, vault, { lovelace: 300n * ADA }), [w.a]);

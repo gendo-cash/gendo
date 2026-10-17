@@ -53,7 +53,7 @@ const h = (n: number) => n.toString(16).padStart(2, "0").repeat(28);
 
 describe("datums without Lucid", () => {
   it("reads a config like the SDK writes it", () => {
-    const cfg = { owners: [h(1), h(2), h(3)], threshold: 2n, paused: true, maxTxValidityMs: 600_000n };
+    const cfg = { owners: [h(1), h(2), h(3)], threshold: 2n, paused: true, maxTxValidityMs: 600_000n, apps: [] };
     expect(configFromCbor(configToData(cfg))).toEqual(cfg);
   });
   it("reads an allowance like the SDK writes it", () => {
@@ -70,11 +70,12 @@ describe("datums without Lucid", () => {
       periodMs: 86_400_000n,
       expiresAt: 1_800_000_000_000n,
       maxFee: 1_000_000n,
+      apps: [],
     };
     expect(allowanceFromCbor(allowanceToData(a))).toEqual(a);
   });
   it("rejects a datum of the wrong shape", () => {
-    expect(() => allowanceFromCbor(configToData({ owners: [h(1)], threshold: 1n, paused: false, maxTxValidityMs: 1n }))).toThrow();
+    expect(() => allowanceFromCbor(configToData({ owners: [h(1)], threshold: 1n, paused: false, maxTxValidityMs: 1n, apps: [] }))).toThrow();
   });
 });
 
@@ -106,7 +107,7 @@ import { utf8ToHex } from "../../src/core/bytes.js";
 describe("vault state from the chain", () => {
   const policy = h(0x0a);
   const addr = scriptAddress(policy, "Preprod");
-  const cfg = { owners: [h(1), h(2), h(3)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n };
+  const cfg = { owners: [h(1), h(2), h(3)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] };
   const unitA = policy + h(0x0b);
   const day = 86_400_000n;
   const allowance = (spent: bigint, windowStart: bigint): AllowanceDatum => ({
@@ -118,6 +119,7 @@ describe("vault state from the chain", () => {
     periodMs: day,
     expiresAt: windowStart + 30n * day,
     maxFee: 1_000_000n,
+    apps: [],
   });
   const utxo = (tx: string, units: Record<string, string>, datum: string | null) => ({
     tx_hash: tx, output_index: 0, inline_datum: datum,
@@ -240,5 +242,18 @@ describe("vault state from the chain", () => {
     });
     const [row] = await allowanceHistory(get, unitA, addr, "b2".repeat(32));
     expect(row).toMatchObject({ kind: "owner", payees: [], allowanceDelta: 10_000_000n });
+  });
+});
+
+describe("light encoder", () => {
+  it("re-encodes any Plutus data so Lucid decodes it to the same value", async () => {
+    const { Constr, Data } = await import("@lucid-evolution/lucid");
+    const { decodePlutusData, encodePlutusData } = await import("../../src/read/plutus-cbor.js");
+    const samples = [
+      Data.to(new Constr(0, [["4c51", "4c50"], 300n, 2_000_000n, 3_600_000n, 500_000n])),
+      Data.to(new Constr(9, [-5n, 2n ** 70n, -(2n ** 70n), "ab".repeat(80), new Map([[1n, "00"]])])),
+      Data.to(new Constr(130, [[]])),
+    ];
+    for (const hex of samples) expect(Data.from(encodePlutusData(decodePlutusData(hex)))).toEqual(Data.from(hex));
   });
 });
