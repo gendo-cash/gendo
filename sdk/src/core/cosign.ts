@@ -43,7 +43,7 @@ export type DescribeOptions = {
 };
 
 const REDEEMER_NAMES: Record<string, string[]> = {
-  spend: ["AgentSpend", "CoSignedSpend", "OwnerManage"],
+  spend: ["AgentSpend", "CoSignedSpend", "OwnerManage", "AgentTrade"],
   mint: ["InitConfig", "ManageAllowances"],
 };
 

@@ -10,6 +10,7 @@ import {
   mintRedeemer,
   spendRedeemer,
   type AllowanceDatum,
+  type AppConfig,
   type AssetCap,
   type ConfigDatum,
 } from "./data.js";
@@ -120,6 +121,24 @@ export const unpause = (l: LucidEvolution, v: Vault, c: ConfigUtxo, s: string[])
   updateConfig(l, v, c, { ...c.config, paused: false }, s);
 export const rotateOwners = (l: LucidEvolution, v: Vault, c: ConfigUtxo, owners: string[], threshold: bigint, s: string[]) =>
   updateConfig(l, v, c, { ...c.config, owners, threshold }, s);
+
+/** Enable a DeFi app on the vault: its adapter and the owners' rules join the config. */
+export async function enableApp(l: LucidEvolution, v: Vault, c: ConfigUtxo, app: AppConfig, s: string[]) {
+  if (c.config.apps.some((a) => a.name === app.name)) throw new Error(`${app.name} is already enabled; change its settings instead`);
+  return updateConfig(l, v, c, { ...c.config, apps: [...c.config.apps, app] }, s);
+}
+
+/** Replace an enabled app's entry (same name): new settings, or a new adapter version. */
+export async function updateApp(l: LucidEvolution, v: Vault, c: ConfigUtxo, app: AppConfig, s: string[]) {
+  if (!c.config.apps.some((a) => a.name === app.name)) throw new Error(`${app.name} isn't enabled`);
+  return updateConfig(l, v, c, { ...c.config, apps: c.config.apps.map((a) => (a.name === app.name ? app : a)) }, s);
+}
+
+/** Disable an app. Agents granted it can no longer trade with it; orders already placed still settle or expire to the vault. */
+export async function disableApp(l: LucidEvolution, v: Vault, c: ConfigUtxo, name: string, s: string[]) {
+  if (!c.config.apps.some((a) => a.name === name)) throw new Error(`${name} isn't enabled`);
+  return updateConfig(l, v, c, { ...c.config, apps: c.config.apps.filter((a) => a.name !== name) }, s);
+}
 
 export async function fundTreasury(lucid: LucidEvolution, vault: Vault, assets: Assets): Promise<TxSignBuilder> {
   return finish(lucid, lucid.newTx().pay.ToAddress(vault.address, assets));

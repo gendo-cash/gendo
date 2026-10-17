@@ -2,7 +2,9 @@
 // network's Minswap deployment applied (onchain/validators/apps/minswap.ak).
 import { applyDoubleCborEncoding, applyParamsToScript, validatorToRewardAddress, validatorToScriptHash, type Network, type Script } from "@lucid-evolution/lucid";
 import blueprint from "../../../../../onchain/plutus.json" with { type: "json" };
+import type { AppConfig } from "../../data.js";
 import { appFor } from "../catalogue.js";
+import { settingsToData, type MinswapSettings } from "./data.js";
 
 export function minswapAdapter(network: Network): { script: Script; hash: string; rewardAddress: string } {
   const found = appFor("minswap", network);
@@ -12,4 +14,10 @@ export function minswapAdapter(network: Network): { script: Script; hash: string
   const d = found.network.deployment;
   const script: Script = { type: "PlutusV3", script: applyDoubleCborEncoding(applyParamsToScript(v.compiledCode, [d.lpPolicy, d.poolScript, d.orderScript])) };
   return { script, hash: validatorToScriptHash(script), rewardAddress: validatorToRewardAddress(network, script) };
+}
+
+/** The vault config entry that enables Minswap on `network` with the owners' settings. */
+export function minswapAppConfig(network: Network, settings: MinswapSettings): AppConfig {
+  const found = appFor("minswap", network)!;
+  return { name: "minswap", adapter: minswapAdapter(network).hash, orderScript: found.network.deployment.orderScript, settings: settingsToData(settings) };
 }

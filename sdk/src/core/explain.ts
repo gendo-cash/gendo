@@ -6,7 +6,7 @@
 import { CML, type UTxO } from "@lucid-evolution/lucid";
 import { multiAssetToAssets, valueToAssets } from "./assets.js";
 import { describeTx } from "./cosign.js";
-import { allowanceFromData, configFromData, type AllowanceDatum, type ConfigDatum } from "./data.js";
+import { allowanceFromData, configFromData, type AllowanceDatum, type AppConfig, type ConfigDatum } from "./data.js";
 import type { Intent } from "./intent.js";
 import type { Vault } from "./vault.js";
 
@@ -17,7 +17,7 @@ export type Change =
   | { kind: "grant"; unit: string; after: AllowanceDatum | null; lovelace: bigint }
   | { kind: "edit"; unit: string; before: AllowanceDatum | null; after: AllowanceDatum | null; lovelaceBefore: bigint; lovelaceAfter: bigint }
   | { kind: "revoke"; unit: string; before: AllowanceDatum | null; lovelace: bigint }
-  | { kind: "spend"; unit: string; redeemer: "AgentSpend" | "CoSignedSpend"; before: AllowanceDatum | null; after: AllowanceDatum | null };
+  | { kind: "spend"; unit: string; redeemer: "AgentSpend" | "CoSignedSpend" | "AgentTrade"; before: AllowanceDatum | null; after: AllowanceDatum | null };
 
 export type Explanation = {
   hash: string;
@@ -109,7 +109,7 @@ export function explainTx(txCbor: string, vault: Vault, resolvedInputs: UTxO[], 
       const out = vaultOuts.find((o) => (o.assets[unit] ?? 0n) > 0n);
       const redeemer = summary.vaultSpends[`${u.txHash}#${u.outputIndex}`];
       if (!out) changes.push({ kind: "revoke", unit, before, lovelace: u.assets.lovelace ?? 0n });
-      else if (redeemer === "CoSignedSpend" || redeemer === "AgentSpend")
+      else if (redeemer === "CoSignedSpend" || redeemer === "AgentSpend" || redeemer === "AgentTrade")
         changes.push({ kind: "spend", unit, redeemer, before, after: tryDecode(allowanceFromData, out.datum) });
       else
         changes.push({ kind: "edit", unit, before, after: tryDecode(allowanceFromData, out.datum), lovelaceBefore: u.assets.lovelace ?? 0n, lovelaceAfter: out.assets.lovelace ?? 0n });
@@ -180,6 +180,21 @@ export function explainTx(txCbor: string, vault: Vault, resolvedInputs: UTxO[], 
     fee,
     ...(summary.intent ? { intent: summary.intent } : {}),
     warnings,
+  };
+}
+
+/** What a config change does to the vault's apps, by name. */
+export function appChanges(before: ConfigDatum | null, after: ConfigDatum | null): { added: AppConfig[]; removed: string[]; changed: { name: string; before: AppConfig; after: AppConfig }[] } {
+  const b = before?.apps ?? [];
+  const a = after?.apps ?? [];
+  const same = (x: AppConfig, y: AppConfig) => x.adapter === y.adapter && x.orderScript === y.orderScript && x.settings === y.settings;
+  return {
+    added: a.filter((x) => !b.some((y) => y.name === x.name)),
+    removed: b.filter((x) => !a.some((y) => y.name === x.name)).map((x) => x.name),
+    changed: a.flatMap((x) => {
+      const y = b.find((z) => z.name === x.name);
+      return y && !same(x, y) ? [{ name: x.name, before: y, after: x }] : [];
+    }),
   };
 }
 
