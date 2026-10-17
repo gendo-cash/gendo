@@ -26,15 +26,15 @@ $V vault create --owners a,b,c --threshold 2 --max-validity 2m --payer a >/dev/n
 $V treasury fund --ada 200 --payer a >/dev/null
 ok "vault 2-of-3, treasury 200 ADA"
 
-$V app enable minswap --pools 4c50 --slippage 3 --fee 2 --order-ttl 1h --tip 0.5 --propose a --sign a,b >/dev/null
+$V app enable minswap --pools 860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f --slippage 3 --fee 2 --order-ttl 1h --tip 0.5 --propose a --sign a,b >/dev/null
 [[ $($V app list | j '.[0].name') == "minswap" && $($V app list | j '.[0].settings.maxSlippageBps') == "300" ]] && ok "owners enabled Minswap (3% slippage)" || fail "app enable"
-if $V app enable minswap --pools 4c50 --slippage 3 --fee 2 --order-ttl 1h --propose a --sign a,b >/dev/null 2>&1; then fail "enable without --tip should refuse (no defaults)"; else ok "every app flag is required: no defaults"; fi
+if $V app enable minswap --pools 860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f --slippage 3 --fee 2 --order-ttl 1h --propose a --sign a,b >/dev/null 2>&1; then fail "enable without --tip should refuse (no defaults)"; else ok "every app flag is required: no defaults"; fi
 
 grant=$($V allowance grant --agent agent --dest "$(addr payee)" --cap lovelace:40:20 --fund 50 --from-treasury --apps minswap --propose a --sign a,b)
 UNIT=$(echo "$grant" | first_json | j .allowance)
 [[ -n "$UNIT" && "$UNIT" != null ]] && ok "granted the agent Minswap" || fail "grant: $grant"
 
-r=$($V agent swap "$UNIT" --pool 4c50 --ada 3 --intent-id S-1 --purpose "test swap" --agent agent)
+r=$($V agent swap "$UNIT" --pool 860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f --ada 3 --intent-id S-1 --purpose "test swap" --agent agent)
 [[ $(echo "$r" | j .submitted) =~ ^[0-9a-f]{64}$ ]] && ok "agent placed a 3 ADA swap" || fail "swap: $r"
 for _ in $(seq 1 30); do n=$(curl -s "$STORE/addresses/$ORDER/utxos" | jq 'length? // 0'); [[ "$n" -gt 0 ]] && break; sleep 1; done
 [[ "$n" -gt 0 ]] && ok "the order sits at Minswap's order address" || fail "no order on chain"
@@ -43,6 +43,6 @@ r=$($V agent swap "$UNIT" --pool 4c51 --ada 1 --intent-id S-2 --purpose x --agen
 [[ $(echo "$r" | j .blocked) == "APP" ]] && ok "a pool the vault doesn't allow is blocked" || fail "unlisted pool: $r"
 
 $V app disable minswap --propose a --sign a,b >/dev/null
-r=$($V agent swap "$UNIT" --pool 4c50 --ada 1 --intent-id S-3 --purpose x --agent agent || true)
+r=$($V agent swap "$UNIT" --pool 860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f --ada 1 --intent-id S-3 --purpose x --agent agent || true)
 [[ $(echo "$r" | j .blocked) == "APP" ]] && ok "after the owners disable Minswap, swaps are blocked" || fail "disabled: $r"
 echo "PASS"
