@@ -45,6 +45,7 @@ pub fn cfg_2_of_3() -> ConfigDatum {
     threshold: 2,
     paused: False,
     max_tx_validity_ms: 3_600_000,
+    apps: [],
   }
 }
 

@@ -711,3 +711,25 @@ test cosign_well_typed_but_malformed_datum() {
   let bad = AllowanceDatum { ..allowance_fixtures.base_datum(), destinations: [] }
   !co(Scenario { ..s, input_datum: bad, typed: Some(bad) })
 }
+
+// ---------------------------------------------------------------------------
+// Apps an agent may use.
+
+test well_formed_accepts_apps() {
+  is_well_formed(AllowanceDatum { ..allowance_fixtures.base_datum(), apps: ["minswap"] })
+}
+
+test well_formed_rejects_duplicate_apps() {
+  !is_well_formed(
+    AllowanceDatum { ..allowance_fixtures.base_datum(), apps: ["minswap", "minswap"] },
+  )
+}
+
+test well_formed_rejects_too_many_apps() {
+  !is_well_formed(
+    AllowanceDatum {
+      ..allowance_fixtures.base_datum(),
+      apps: ["a", "b", "c", "d", "e"],
+    },
+  )
+}

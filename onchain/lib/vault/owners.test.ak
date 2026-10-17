@@ -4,7 +4,7 @@ use vault/fixtures.{
   agent_key, cfg_2_of_3, key, owner_a, owner_b, owner_c, owner_d, stranger,
 }
 use vault/owners.{is_valid_config, threshold_met}
-use vault/types.{ConfigDatum, max_owners}
+use vault/types.{AppConfig, ConfigDatum, max_owners}
 
 // ---------------------------------------------------------------------------
 // D5: invalid owner sets (unit)
@@ -134,4 +134,79 @@ test prop_threshold_counts_only_distinct_owners(
 test repeated_signature_counts_once() {
   // The ledger already de-duplicates required signers; the count is per owner regardless.
   !threshold_met(cfg_2_of_3(), [owner_a, owner_a])
+}
+
+// ---------------------------------------------------------------------------
+// Enabled apps: checked whenever a config is written.
+
+fn app(name: ByteArray) -> AppConfig {
+  AppConfig { name, adapter: key(60), order_script: key(61), settings: Void }
+}
+
+test config_accepts_apps() {
+  is_valid_config(ConfigDatum { ..cfg_2_of_3(), apps: [app("minswap")] })
+}
+
+test config_accepts_max_apps() {
+  is_valid_config(
+    ConfigDatum { ..cfg_2_of_3(), apps: [app("a"), app("b"), app("c"), app("d")] },
+  )
+}
+
+test config_rejects_duplicate_app_names() {
+  !is_valid_config(
+    ConfigDatum { ..cfg_2_of_3(), apps: [app("minswap"), app("minswap")] },
+  )
+}
+
+test config_rejects_too_many_apps() {
+  !is_valid_config(
+    ConfigDatum {
+      ..cfg_2_of_3(),
+      apps: [app("a"), app("b"), app("c"), app("d"), app("e")],
+    },
+  )
+}
+
+test config_rejects_empty_app_name() {
+  !is_valid_config(ConfigDatum { ..cfg_2_of_3(), apps: [app("")] })
+}
+
+test config_rejects_long_app_name() {
+  !is_valid_config(
+    ConfigDatum {
+      ..cfg_2_of_3(),
+      apps: [
+        app(
+          #"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        ),
+      ],
+    },
+  )
+}
+
+test config_accepts_32_byte_app_name() {
+  is_valid_config(
+    ConfigDatum {
+      ..cfg_2_of_3(),
+      apps: [
+        app(#"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
+      ],
+    },
+  )
+}
+
+test config_rejects_short_adapter_hash() {
+  !is_valid_config(
+    ConfigDatum { ..cfg_2_of_3(), apps: [AppConfig { ..app("m"), adapter: #"00" }] },
+  )
+}
+
+test config_rejects_short_order_script() {
+  !is_valid_config(
+    ConfigDatum {
+      ..cfg_2_of_3(),
+      apps: [AppConfig { ..app("m"), order_script: #"00" }],
+    },
+  )
 }

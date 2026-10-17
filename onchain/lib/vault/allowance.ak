@@ -15,7 +15,8 @@ use cardano/transaction.{InlineDatum, Input, Output, OutputReference, Transactio
 use vault/config.{canonical_address, find_config, no_ref_scripts}
 use vault/owners.{threshold_met}
 use vault/types.{
-  AllowanceDatum, ConfigDatum, config_token_name, max_assets, max_destinations,
+  AllowanceDatum, ConfigDatum, config_token_name, max_apps, max_assets,
+  max_destinations,
 }
 
 /// Allowance token names are derived from a UTxO the creating tx spends, so
@@ -121,6 +122,8 @@ pub fn is_well_formed(d: AllowanceDatum) -> Bool {
     d.period_ms > 0,
     d.expires_at > d.window_start,
     d.max_fee >= 0,
+    list.length(d.apps) <= max_apps,
+    list.unique(d.apps) == d.apps,
   }
 }
 

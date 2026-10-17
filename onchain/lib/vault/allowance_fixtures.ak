@@ -76,6 +76,7 @@ pub fn base_datum() -> AllowanceDatum {
     period_ms: day,
     expires_at: t0 + 30 * day,
     max_fee: 1_000_000,
+    apps: [],
   }
 }
 
