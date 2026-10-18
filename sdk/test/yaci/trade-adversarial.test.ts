@@ -16,6 +16,8 @@ import { SCRIPT_FAILURE, attack, setPayee, type Attack, type Ctx } from "./attac
 import { ADA, NETWORK, grant, readAllowance, readConfig, signSubmit, yaciWorld, type World } from "./world.js";
 
 const found = appFor("minswap", NETWORK)!;
+// Preprod blocks are sparse: the setup's half-dozen txs can take well over 10 minutes.
+const SETUP_MS = process.env.ADV_TARGET === "preprod" ? 3_600_000 : 600_000;
 const POOL = found.network.pools[0]!.lpName;
 const settings: MinswapSettings = { pools: [POOL], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 3_600_000n, maxCancelTip: 500_000n };
 const adapter = minswapAdapter(NETWORK);
@@ -70,7 +72,7 @@ beforeAll(async () => {
   await signSubmit(w.lucid, async () => owner.enableApp(w.lucid, w.vault, await readConfig(w.lucid, w.vault), minswapAppConfig(NETWORK, settings), [w.a.pkh, w.b.pkh]), [w.a, w.b]);
   unit = await grant(w, { apps: ["minswap"] });
   pool = await findPool({ lucid: w.lucid }, POOL);
-}, 600_000);
+}, SETUP_MS);
 
 describe("baseline", () => {
   it("the harness's honest trade is accepted", async () => {
@@ -99,7 +101,7 @@ describe("with any pool allowed", () => {
     const any = minswapAppConfig(NETWORK, { ...settings, pools: "any" });
     w.lucid.selectWallet.fromPrivateKey(w.a.privateKey);
     await signSubmit(w.lucid, async () => owner.updateApp(w.lucid, w.vault, await readConfig(w.lucid, w.vault), any, [w.a.pkh, w.b.pkh]), [w.a, w.b]);
-  }, 600_000);
+  }, SETUP_MS);
   it("the honest trade is still accepted", async () => {
     const r = await trade();
     expect(r.ok, r.body.slice(0, 400)).toBe(true);
