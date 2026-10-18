@@ -1,5 +1,6 @@
 // The vault's DeFi apps: what the catalogue offers, what this vault enabled and with which rules.
 // Enabling or changing an app is a vault settings change: proposed here, signed by the threshold.
+import { AppLogo } from "../../ui/apps.tsx";
 import { useState } from "react";
 import { catalogue, type CatalogueApp } from "../../../../sdk/src/core/apps/catalogue.ts";
 import { minswapAdapter } from "../../../../sdk/src/core/apps/minswap/adapter.ts";
@@ -68,7 +69,7 @@ function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: Config
   return (
     <section className="panel">
       <div className="ph">
-        <h2>{app.title}</h2>
+        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}><AppLogo name={app.name} size={22} />{app.title}</h2>
         <span className="cap">{enabled ? "Enabled" : "Not enabled"}</span>
       </div>
       <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AppLogo } from "../../ui/apps.tsx";
 import { fromPlutusAddress, readAllowance, readConfig, toPlutusAddress, type AllowanceDatum } from "../../../../sdk/src/core/index.ts";
 import { api } from "../api.ts";
 import { vaultOf } from "../chain.ts";
@@ -173,7 +174,7 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
                 {d.cfg.apps.map((a) => (
                   <label key={a.name} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input type="checkbox" checked={f.apps.includes(a.name)} onChange={(e) => setF({ ...f, apps: e.target.checked ? [...f.apps, a.name] : f.apps.filter((x) => x !== a.name) })} />
-                    {a.name === "minswap" ? "Minswap: swap within this budget" : a.name}
+                    <AppLogo name={a.name} size={18} />{a.name === "minswap" ? "Minswap: swap within this budget" : a.name}
                   </label>
                 ))}
               </span>
