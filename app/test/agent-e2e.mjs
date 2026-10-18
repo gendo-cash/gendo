@@ -35,12 +35,13 @@ try {
   await signIn(A, KEY_A);
   await signIn(B, KEY_B);
 
-  // Owner A enables Minswap on the vault (every rule typed: no defaults); owner B signs.
+  // Owner A opens Minswap from the apps grid: its settings page comes filled in; A raises the slippage to 3%. Owner B signs.
   await A.open(`${APP}/v/${POLICY}/apps`);
-  await A.click(/^Enable Minswap$/);
+  await A.click(/^Minswap/);
+  await A.waitText(/Review and propose/);
   await A.check(/^Only these pools$/);
   await A.check(/ADA ↔ TEST/);
-  for (const [id, v] of [["ms-slippage", "3"], ["ms-fee", "2"], ["ms-hours", "24"], ["ms-tip", "0.5"]]) await A.fill(id, v);
+  await A.fill("ms-slippage", "3");
   await A.click(/^Review and propose$/);
   await A.waitText(/Review before signing[\s\S]*Enable Minswap[\s\S]*Minswap max slippage/);
   // The settings record grows, so it holds a little more ADA (from the proposer): the review warns, and A confirms.
@@ -50,12 +51,12 @@ try {
   await B.waitText(/Enable Minswap/);
   await B.click(/^Sign with wallet$/);
   for (let i = 0; i < 40; i++) {
-    await A.open(`${APP}/v/${POLICY}/apps`);
+    await A.open(`${APP}/v/${POLICY}/apps/minswap/settings`);
     if (/Change settings/.test(await A.waitText(/Minswap/))) break;
     await sleep(3000);
   }
   await A.waitText(/Change settings/);
-  ok("owner A enabled Minswap in the app (pools, 3% slippage, fee, lifetime, tip), owner B signed, it landed");
+  ok("owner A enabled Minswap from the apps grid (suggested settings, slippage raised to 3%), owner B signed, it landed");
 
   await A.open(`${APP}/v/${POLICY}/connect`);
   await A.waitText(/Name this agent/); // the vault list loads first

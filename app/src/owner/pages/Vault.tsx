@@ -15,7 +15,7 @@ import { AppsTab } from "./Apps.tsx";
 import { OldVaultPage } from "./OldVault.tsx";
 import { partialSign } from "../wallet.ts";
 
-export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "activity" | "treasury" | "apps" | "settings" }) {
+export function VaultPage({ policy, tab, app }: { policy: string; tab: "agents" | "activity" | "treasury" | "apps" | "settings"; app?: string }) {
   const o = useOwner();
   const mine = o.vaults.find((v) => v.policy === policy);
   const data = useLoad(async () => {
@@ -122,7 +122,7 @@ export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "ac
         {view && tab === "treasury" && (
           <Treasury lovelace={view.treasuryLovelace} tokens={view.treasury} address={view.address} busy={!!busy} net={o.net} onFund={(lovelace) => void propose({ op: "fund", lovelace }, "Funding sent.")} />
         )}
-        {view && cfg && tab === "apps" && <AppsTab cfg={cfg} busy={!!busy} onPropose={(r, done) => void propose(r, done)} />}
+        {view && cfg && tab === "apps" && <AppsTab policy={policy} cfg={cfg} busy={!!busy} onPropose={(r, done) => void propose(r, done)} {...(app ? { app } : {})} />}
         {view && cfg && tab === "settings" && (
           <>
             <section className="panel">

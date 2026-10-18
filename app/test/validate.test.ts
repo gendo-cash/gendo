@@ -93,10 +93,12 @@ import { minswapForm, minswapProblems, type MinswapForm } from "../src/owner/val
 
 describe("the Minswap settings form", () => {
   const filled: MinswapForm = { scope: "only", pools: ["4c50"], slippage: "3", fee: "2", hours: "24", tip: "0.5" };
-  it("starts empty: no defaults", () => {
-    expect(minswapForm()).toEqual({ scope: "", pools: [], slippage: "", fee: "", hours: "", tip: "" });
-    expect(minswapProblems(minswapForm()).length).toBeGreaterThanOrEqual(5);
-    expect(minswapProblems(minswapForm())).toContain("Choose any pool or only the pools you pick.");
+  it("starts with suggested values: only the listed pools, 1% slippage, 2 ADA fee, 24 h, 0.5 ADA tip", () => {
+    expect(minswapForm(undefined, ["4c50", "4c51"])).toEqual({ scope: "only", pools: ["4c50", "4c51"], slippage: "1", fee: "2", hours: "24", tip: "0.5" });
+    expect(minswapProblems(minswapForm(undefined, ["4c50"]))).toEqual([]);
+  });
+  it("an owner who clears the pool choice is asked to pick one", () => {
+    expect(minswapProblems({ ...filled, scope: "" })).toContain("Choose any pool or only the pools you pick.");
   });
   it("turns a filled form into the chain's settings", () => {
     expect(minswapProblems(filled)).toEqual([]);

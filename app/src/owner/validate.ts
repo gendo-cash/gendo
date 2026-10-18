@@ -133,7 +133,7 @@ export function createOptions(f: CreateForm, me: string, net: "Preprod" | "Custo
   return { fund: toLovelace(f.fund) ?? 0n, signer: me, ...(f.refScript ? { refScriptAddress: refHolderAddress(net) } : {}) };
 }
 
-// --- the Minswap settings form (no defaults: every field starts empty) ---
+// --- the Minswap settings form (filled with suggested values; owners change any of them) ---
 
 /** `scope` starts empty: owners choose "any" pool or "only" the picked ones. */
 export type MinswapForm = { scope: "" | "any" | "only"; pools: string[]; slippage: string; fee: string; hours: string; tip: string };
@@ -145,9 +145,9 @@ const decimal = (n: bigint, unit: bigint) => {
   return frac ? `${whole}.${frac}` : `${whole}`;
 };
 
-/** An empty form, or the current settings when editing. */
-export function minswapForm(current?: MinswapSettingsBig): MinswapForm {
-  if (!current) return { scope: "", pools: [], slippage: "", fee: "", hours: "", tip: "" };
+/** Suggested settings for a first enable (the safer pool choice: only the listed pools), or the current settings when editing. */
+export function minswapForm(current?: MinswapSettingsBig, listedPools: string[] = []): MinswapForm {
+  if (!current) return { scope: "only", pools: listedPools, slippage: "1", fee: "2", hours: "24", tip: "0.5" };
   return {
     scope: current.pools === "any" ? "any" : "only",
     pools: current.pools === "any" ? [] : current.pools,

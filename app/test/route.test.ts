@@ -9,6 +9,8 @@ describe("routes", () => {
     expect(parseRoute(`/v/${P}`)).toEqual({ page: "vault", policy: P, tab: "agents" });
     expect(parseRoute(`/v/${P}/settings`)).toEqual({ page: "vault", policy: P, tab: "settings" });
     expect(parseRoute(`/v/${P}/apps`)).toEqual({ page: "vault", policy: P, tab: "apps" });
+    expect(parseRoute(`/v/${P}/apps/minswap/settings`)).toEqual({ page: "vault", policy: P, tab: "apps", app: "minswap" });
+    expect(parseRoute(`/v/${P}/apps/minswap`)).toEqual({ page: "missing" });
     expect(parseRoute(`/v/${P}/agents/new`)).toEqual({ page: "agent", policy: P });
     expect(parseRoute(`/v/${P}/agents/${P}11`)).toEqual({ page: "agent", policy: P, unit: `${P}11` });
   });

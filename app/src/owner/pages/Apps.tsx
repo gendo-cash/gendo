@@ -7,24 +7,53 @@ import { minswapAdapter } from "../../../../sdk/src/core/apps/minswap/adapter.ts
 import { settingsFromData } from "../../../../sdk/src/core/apps/minswap/data.ts";
 import type { ConfigDatum } from "../../../../sdk/src/core/index.ts";
 import type { Recipe } from "../recipes.ts";
-import { ErrorNote, Signers, defaultSigners, useOwner } from "../ui.tsx";
+import { ErrorNote, Link, Signers, defaultSigners, useOwner } from "../ui.tsx";
+import { navigate } from "../../route.ts";
 import { minswapForm, minswapProblems, type MinswapForm } from "../validate.ts";
 import { ada } from "../../public/format.ts";
 
-export function AppsTab({ cfg, busy, onPropose }: { cfg: ConfigDatum; busy: boolean; onPropose(r: Recipe, done: string): void }) {
+export function AppsTab({ policy, cfg, busy, onPropose, app }: { policy: string; cfg: ConfigDatum; busy: boolean; onPropose(r: Recipe, done: string): void; app?: string }) {
   const o = useOwner();
   const apps = catalogue().filter((a) => a.networks[o.net as "Preprod" | "Custom"]);
+  if (app) {
+    const a = apps.find((x) => x.name === app);
+    return (
+      <>
+        <span style={{ fontSize: 13 }}><Link to={`/v/${policy}/apps`} className="faint">← All apps</Link></span>
+        {a ? <AppCard key={a.name} policy={policy} app={a} cfg={cfg} busy={busy} onPropose={onPropose} /> : <p className="muted">No app called {app} on this network.</p>}
+      </>
+    );
+  }
   return (
     <>
       <p className="faint" style={{ margin: 0, fontSize: 13 }}>Apps let agents do more than pay: trade inside their budget, through code the chain checks on every order. An app does nothing until you enable it here and allow it for an agent in its budget.</p>
-      {apps.map((a) => <AppCard key={a.name} app={a} cfg={cfg} busy={busy} onPropose={onPropose} />)}
+      {[
+        { title: "Enabled on this vault", list: apps.filter((a) => cfg.apps.some((x) => x.name === a.name)) },
+        { title: "Available", list: apps.filter((a) => !cfg.apps.some((x) => x.name === a.name)) },
+      ].filter((g) => g.list.length).map((g) => (
+        <section key={g.title} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span className="cap">{g.title}</span>
+          <div className="appgrid">
+            {g.list.map((a) => {
+              const on = g.title !== "Available";
+              return (
+                <Link key={a.name} to={`/v/${policy}/apps/${a.name}/settings`} className={on ? "apptile on" : "apptile"}>
+                  <AppLogo name={a.name} size={48} />
+                  <span className="apptitle">{a.title}</span>
+                  {on && <span className="sr">Enabled</span>}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ))}
       {!apps.length && <p className="muted">No apps are available on this network yet.</p>}
       <span className="faint" style={{ fontSize: 12 }}>Something missing? Apps are added to gendo's catalogue by pull request, after review and an audit of their adapter.</span>
     </>
   );
 }
 
-function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: ConfigDatum; busy: boolean; onPropose(r: Recipe, done: string): void }) {
+function AppCard({ policy, app, cfg, busy, onPropose }: { policy: string; app: CatalogueApp; cfg: ConfigDatum; busy: boolean; onPropose(r: Recipe, done: string): void }) {
   const o = useOwner();
   const network = app.networks[o.net as "Preprod" | "Custom"]!;
   const enabled = cfg.apps.find((x) => x.name === app.name);
@@ -37,15 +66,17 @@ function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: Config
   })();
   const outdated = enabled && enabled.adapter !== minswapAdapter(o.net).hash;
   const threshold = Number(cfg.threshold);
-  const [editing, setEditing] = useState(false);
-  const [f, setF] = useState<MinswapForm>(minswapForm());
+  const listed = network.pools.map((p) => p.lpName);
+  // Not enabled yet: the form is the page, filled with suggested values.
+  const [editing, setEditing] = useState(!enabled);
+  const [f, setF] = useState<MinswapForm>(() => minswapForm(current, listed));
   const [signers, setSigners] = useState<string[]>(() => defaultSigners(cfg.owners, threshold, o.me.pkh));
   const [tried, setTried] = useState(false);
   const problems = minswapProblems(f);
   const label = (lp: string) => network.pools.find((p) => p.lpName === lp)?.label ?? `${lp.slice(0, 8)}…`;
   const help = (field: string) => app.settings.find((s) => s.field === field)?.help;
   const start = () => {
-    setF(minswapForm(current));
+    setF(minswapForm(current, listed));
     setTried(false);
     setEditing(true);
   };
@@ -126,7 +157,7 @@ function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: Config
             {tried && problems.map((p) => <ErrorNote key={p} error={p} />)}
             <span style={{ display: "flex", gap: 8 }}>
               <button type="button" className="btn pri" disabled={busy} onClick={submit}>Review and propose</button>
-              <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => (enabled ? setEditing(false) : navigate(`/v/${policy}/apps`))}>Cancel</button>
             </span>
           </div>
         </>

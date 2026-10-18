@@ -125,7 +125,7 @@ export default function OwnerApp({ route, network }: { route: Route; network: Ne
       {route.page === "vaults" && <Start />}
       {route.page === "create" && <Create />}
       {route.page === "connect" && <ConnectAgent policy={route.policy} />}
-      {route.page === "vault" && <VaultPage policy={route.policy} tab={route.tab} />}
+      {route.page === "vault" && <VaultPage policy={route.policy} tab={route.tab} {...(route.app ? { app: route.app } : {})} />}
       {route.page === "agent" && <AgentEditor policy={route.policy} {...(route.unit ? { unit: route.unit } : {})} />}
       {route.page === "missing" && <div className="app" data-ready><p style={{ padding: 20 }}>Not found.</p></div>}
     </OwnerCtx.Provider>
