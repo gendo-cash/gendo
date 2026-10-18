@@ -65,4 +65,17 @@ describe("trade rules mirror the adapter", () => {
     ["extra token", { orderValue: { lovelace: 8_000_000n, [h("7c") + "4a554e4b"]: 1n } }],
     ["pool data from another pool (its assets don't derive the order's LP name)", { pool: { ...pool, assetB: { policy: h("d6"), name: "4c50" } } }],
   ])("refuses: %s", (_name, over) => expect(problems(over as Partial<typeof base>)).not.toEqual([]));
+  describe("with any pool allowed", () => {
+    const anyCfg: ConfigDatum = { ...cfg, apps: [app({ settings: settingsToData({ ...settings, pools: "any" }) })] };
+    const other: MinswapPool = { ...pool, assetB: { policy: h("7c"), name: "4f54484552" } };
+    const unlisted = { ...order, lp: { policy: h("d6"), name: lpNameOf(other) } };
+    it("an unlisted genuine pool passes (and is refused when only listed pools are)", () => {
+      expect(problems({ config: anyCfg, order: unlisted, pool: other })).toEqual([]);
+      expect(problems({ order: unlisted, pool: other })).toContain("that pool isn't allowed");
+    });
+    it("the floor and the pool's identity still hold", () => {
+      expect(problems({ config: anyCfg, order: { ...unlisted, minimumReceive: unlisted.minimumReceive - 1n }, pool: other })).not.toEqual([]);
+      expect(problems({ config: anyCfg, order: unlisted, pool })).not.toEqual([]);
+    });
+  });
 });

@@ -7,8 +7,8 @@ import { addressFromData, addressToData, type Hex, type PlutusAddress } from "..
 
 /** The vault's rules for Minswap (`AppConfig.settings`). */
 export type MinswapSettings = {
-  /** Allowed pools, by LP asset name (hex); the LP policy is the deployment's. */
-  pools: Hex[];
+  /** "any" genuine Minswap pool, or only these, by LP asset name (hex; the LP policy is the deployment's). */
+  pools: "any" | Hex[];
   maxSlippageBps: bigint;
   maxBatcherFee: bigint;
   maxOrderTtlMs: bigint;
@@ -47,15 +47,21 @@ const OAM_WITHDRAW = 2;
 const SWAP_EXACT_IN = 0;
 const SAO_SPECIFIC = 0;
 
+const ONLY_POOLS = 0;
+const ANY_POOL = 1;
+
 export function settingsToData(s: MinswapSettings): string {
-  return Data.to(new Constr(0, [s.pools, s.maxSlippageBps, s.maxBatcherFee, s.maxOrderTtlMs, s.maxCancelTip]));
+  const pools = s.pools === "any" ? new Constr(ANY_POOL, []) : new Constr(ONLY_POOLS, [s.pools]);
+  return Data.to(new Constr(0, [pools, s.maxSlippageBps, s.maxBatcherFee, s.maxOrderTtlMs, s.maxCancelTip]));
 }
 
 export function settingsFromData(cbor: string): MinswapSettings {
   const c = Data.from(cbor) as Constr<Data>;
   if (!(c instanceof Constr) || c.index !== 0 || c.fields.length !== 5) throw new Error("not Minswap settings");
-  const [pools, slip, fee, ttl, tip] = c.fields;
-  return { pools: pools as string[], maxSlippageBps: slip as bigint, maxBatcherFee: fee as bigint, maxOrderTtlMs: ttl as bigint, maxCancelTip: tip as bigint };
+  const [scope, slip, fee, ttl, tip] = c.fields;
+  if (!(scope instanceof Constr) || scope.index > ANY_POOL) throw new Error("not Minswap settings");
+  const pools = scope.index === ANY_POOL ? ("any" as const) : (scope.fields[0] as string[]);
+  return { pools, maxSlippageBps: slip as bigint, maxBatcherFee: fee as bigint, maxOrderTtlMs: ttl as bigint, maxCancelTip: tip as bigint };
 }
 
 export function orderDatumToData(o: MinswapOrder): string {

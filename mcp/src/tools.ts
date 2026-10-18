@@ -62,7 +62,7 @@ export function registerTools(
         "Swap inside your budget on an app the owners enabled for you (see get_budget's apps), e.g. sell ADA for a token on Minswap. The chain enforces the owners' rules, including a worst acceptable price. Returns placed (with the minimum you'll receive), already_placed, or blocked with a code and the next step. Proceeds go to the vault's treasury, not back to your budget.",
       inputSchema: {
         app: z.string().describe('The app, e.g. "minswap"'),
-        pool: z.string().describe('A pool from get_budget, e.g. "ADA ↔ NACRE"'),
+        pool: z.string().describe('A pool from get_budget, e.g. "ADA ↔ NACRE". If get_budget says pools "any": any Minswap pool, by label, LP asset name, or its two assets as "lovelace/<policy id + name hex>"'),
         amount_ada: z.number().positive().optional().describe("ADA to sell"),
         asset: z.object({ unit: z.string(), quantity: z.number().positive() }).optional().describe("Or: the pool's other asset to sell (policy id + name, and quantity)"),
         intent_id: z.string().min(1).describe("Stable id for this swap. Reuse it on retries."),

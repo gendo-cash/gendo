@@ -49,11 +49,11 @@ export async function browser(port) {
     async check(re, timeout = 60_000) {
       const end = Date.now() + timeout;
       while (Date.now() < end) {
-        const ok = await evaluate(`(() => { const re = new RegExp(${JSON.stringify(re.source)}, ${JSON.stringify(re.flags)}); const l = [...document.querySelectorAll('label')].find((e) => re.test(e.innerText.trim())); const box = l?.querySelector('input[type=checkbox]'); if (!box) return false; if (!box.checked) box.click(); return true; })()`);
+        const ok = await evaluate(`(() => { const re = new RegExp(${JSON.stringify(re.source)}, ${JSON.stringify(re.flags)}); const l = [...document.querySelectorAll('label')].find((e) => re.test(e.innerText.trim())); const box = l?.querySelector('input[type=checkbox],input[type=radio]'); if (!box) return false; if (!box.checked) box.click(); return true; })()`);
         if (ok) return;
         await sleep(400);
       }
-      throw new Error(`no checkbox labelled ${re}`);
+      throw new Error(`no checkbox or radio labelled ${re}`);
     },
     /** Type into an input found by its id (React-safe). */
     async fill(id, value) {

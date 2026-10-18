@@ -7,7 +7,8 @@ use apps/minswap/place.{place}
 use apps/minswap/place
 use apps/minswap/types.{
   Asset, DAOSpecificAmount, Deposit, Donation, EODDatumHash, EODInlineDatum,
-  MinswapSettings, OAMSignature, OAMSpendScript, OAMWithdrawScript, OrderDatum,
+  AnyPool, MinswapSettings, OAMSignature, OAMSpendScript, OAMWithdrawScript,
+  OnlyPools, OrderDatum,
   PartialSwap, SAOAll, SAOSpecificAmount, StopLoss, SwapExactIn,
   SwapMultiRouting, pool_auth_name,
 } as ms
@@ -113,11 +114,11 @@ test settings_slippage_at_max_ok() {
 }
 
 test settings_no_pools() fail {
-  run(with_settings(MinswapSettings { ..settings(), pools: [] }))
+  run(with_settings(MinswapSettings { ..settings(), pools: OnlyPools([]) }))
 }
 
 test settings_too_many_pools() fail {
-  run(with_settings(MinswapSettings { ..settings(), pools: [#"01", #"02", #"03", #"04", #"05", #"06", #"07", #"08", lp_name] }))
+  run(with_settings(MinswapSettings { ..settings(), pools: OnlyPools([#"01", #"02", #"03", #"04", #"05", #"06", #"07", #"08", lp_name]) }))
 }
 
 test settings_fee_zero() fail {
@@ -213,6 +214,48 @@ test step_zero_amount() fail {
 test pool_not_listed() fail {
   let d = OrderDatum { ..order_datum(), lp_asset: Asset { policy_id: lp_policy, asset_name: #"4c59" } }
   run(Case { ..case(), orders: [order(d)], pools: [pool_input(#"4c59", pool_datum())] })
+}
+
+// A second genuine pool (ADA/OTHER) the default settings don't list.
+fn unlisted(pools: ms.Pools, minimum: Int) -> Case {
+  let d = ms.PoolDatum { ..pool_datum(), asset_b: Asset { policy_id: token_policy, asset_name: "OTHER" } }
+  let lp = place.lp_name_of(d)
+  let o =
+    OrderDatum {
+      ..order_datum(),
+      lp_asset: Asset { policy_id: lp_policy, asset_name: lp },
+      step: SwapExactIn { a_to_b_direction: True, swap_amount_option: SAOSpecificAmount(swap_amount), minimum_receive: minimum, killable: True },
+    }
+  Case { ..with_settings(MinswapSettings { ..settings(), pools: pools }), orders: [order(o)], pools: [pool_input(lp, d)] }
+}
+
+test only_pools_refuse_an_unlisted_genuine_pool() fail {
+  run(unlisted(settings().pools, floor_min(swap_amount, True)))
+}
+
+test any_pool_accepts_an_unlisted_genuine_pool() {
+  run(unlisted(AnyPool, floor_min(swap_amount, True)))
+}
+
+test any_pool_keeps_the_price_floor() fail {
+  run(unlisted(AnyPool, floor_min(swap_amount, True) - 1))
+}
+
+test any_pool_refuses_a_fake_pool() fail {
+  run(Case { ..with_settings(MinswapSettings { ..settings(), pools: AnyPool }), pools: [pool_input(#"4c51", pool_datum())] })
+}
+
+test any_pool_refuses_a_look_alike_pool() fail {
+  // A real Minswap pool holding the order's LP as a reserve isn't the order's pool.
+  let lp_y = #"bd40e5238c6d2482ff52bb3f9c1a90d3524785484a1f4cdae0680f6ba453b9ee"
+  let y = ms.PoolDatum { ..pool_datum(), asset_b: Asset { policy_id: lp_policy, asset_name: lp_name }, reserve_a: 1_000_000_000_000_000, reserve_b: 1 }
+  let value =
+    ada(2)
+      |> assets.merge(assets.from_asset(lp_policy, pool_auth_name, 1))
+      |> assets.merge(assets.from_asset(lp_policy, lp_y, 1_000_000))
+      |> assets.merge(assets.from_asset(lp_policy, lp_name, 1))
+  let pool_y = Input { output_reference: fixtures.out_ref(501), output: output(mfx.pool_address(), value, y) }
+  run(Case { ..with_settings(MinswapSettings { ..settings(), pools: AnyPool }), pools: [pool_y] })
 }
 
 test lp_other_policy() fail {

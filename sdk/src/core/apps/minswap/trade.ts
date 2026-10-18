@@ -15,14 +15,14 @@ import { appFor } from "../catalogue.js";
 import { minswapAdapter } from "./adapter.js";
 import { orderDatumToData, poolDatumFromData, type MinswapOrder, type MinswapPool } from "./data.js";
 import { amountOut, lpNameOf, minimumFor } from "./quote.js";
-import { minswapSettings, tradeProblems } from "./rules.js";
+import { minswapSettings, poolAllowed, tradeProblems } from "./rules.js";
 
 /** What Minswap's batchers expect to hold back for the order output, returned with the proceeds. */
 export const ORDER_DEPOSIT = 2_000_000n;
 const POOL_AUTH = "4d5350";
 
 export type TradeRequest = Omit<SpendRequest, "payments"> & {
-  /** The pool's LP asset name (hex), from the vault's allowed pools. */
+  /** The pool's LP asset name (hex): one the vault allows, or any genuine pool if it allows any. */
   pool: string;
   amountIn: bigint;
   /** True: sell the pool's asset A (ADA for ADA pools) for asset B. */
@@ -64,7 +64,7 @@ export async function buildAgentTrade(req: TradeRequest): Promise<BuiltTrade> {
   if (!settings) throw new LimitError("APP", "Minswap isn't enabled on this vault (the owners can enable it under Apps)");
   const app = config.config.apps.find((a) => a.adapter === adapter.hash)!;
   if (!allowance.datum.apps.includes(app.name)) throw new LimitError("APP", "this agent isn't allowed to use Minswap (the owners can allow it in its budget)");
-  if (!settings.pools.includes(req.pool)) throw new LimitError("APP", "that pool isn't one the vault allows");
+  if (!poolAllowed(settings, req.pool)) throw new LimitError("APP", "that pool isn't one the vault allows");
   if (req.amountIn <= 0n) throw new LimitError("APP", "the swap amount must be positive");
 
   const { utxo: poolUtxo, pool } = await findPool(req, req.pool);

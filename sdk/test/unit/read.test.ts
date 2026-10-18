@@ -307,6 +307,7 @@ describe("app settings without Lucid", () => {
     const { minswapSettingsFromCbor } = await import("../../src/read/decode.js");
     const s = { pools: ["4c51", "4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 3_600_000n, maxCancelTip: 500_000n };
     expect(minswapSettingsFromCbor(settingsToData(s))).toEqual(s);
+    expect(minswapSettingsFromCbor(settingsToData({ ...s, pools: "any" }))).toEqual({ ...s, pools: "any" });
     expect(minswapSettingsFromCbor("d87980")).toBeNull();
   });
 });

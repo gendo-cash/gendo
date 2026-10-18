@@ -6,7 +6,7 @@ use aiken/interval.{Finite, Interval, IntervalBound}
 use apps/minswap/math
 use apps/minswap/types.{
   Asset, Deployment, EODNoDatum, MinswapSettings, OAMWithdrawScript,
-  OrderDatum, PoolDatum, SAOSpecificAmount, SwapExactIn, pool_auth_name,
+  OnlyPools, OrderDatum, PoolDatum, SAOSpecificAmount, SwapExactIn, pool_auth_name,
 } as ms
 use cardano/address.{Address, Inline, Script, VerificationKey}
 use cardano/assets
@@ -49,7 +49,7 @@ pub fn dep() -> Deployment {
 
 pub fn settings() -> MinswapSettings {
   MinswapSettings {
-    pools: [other_lp, lp_name],
+    pools: OnlyPools([other_lp, lp_name]),
     max_slippage_bps: 300,
     max_batcher_fee: 2_000_000,
     max_order_ttl_ms: afx.hour,

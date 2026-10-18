@@ -42,6 +42,13 @@ for _ in $(seq 1 30); do n=$(curl -s "$STORE/addresses/$ORDER/utxos" | jq 'lengt
 r=$($V agent swap "$UNIT" --pool 4c51 --ada 1 --intent-id S-2 --purpose x --agent agent || true)
 [[ $(echo "$r" | j .blocked) == "APP" ]] && ok "a pool the vault doesn't allow is blocked" || fail "unlisted pool: $r"
 
+$V app update minswap --pools any --slippage 3 --fee 2 --order-ttl 1h --tip 0.5 --propose a --sign a,b >/dev/null
+[[ $($V app list | j '.[0].settings.pools') == "any" ]] && ok "owners switched Minswap to any pool" || fail "app update --pools any"
+r=$($V agent swap "$UNIT" --pool 860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f --ada 2 --intent-id S-4 --purpose "any pool" --agent agent)
+[[ $(echo "$r" | j .submitted) =~ ^[0-9a-f]{64}$ ]] && ok "agent swapped with any pool allowed" || fail "any-pool swap: $r"
+r=$($V agent swap "$UNIT" --pool 4c51 --ada 1 --intent-id S-5 --purpose x --agent agent || true)
+[[ $(echo "$r" | j .blocked) == "APP" ]] && ok "any pool still means a real Minswap pool" || fail "fake pool with any: $r"
+
 $V app disable minswap --propose a --sign a,b >/dev/null
 r=$($V agent swap "$UNIT" --pool 860aadb43b75501995d896a52ce915b99d11cdce436b51ec079697ddd3841c8f --ada 1 --intent-id S-3 --purpose x --agent agent || true)
 [[ $(echo "$r" | j .blocked) == "APP" ]] && ok "after the owners disable Minswap, swaps are blocked" || fail "disabled: $r"

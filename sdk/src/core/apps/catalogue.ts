@@ -54,7 +54,7 @@ const MINSWAP: CatalogueApp = {
   ],
   actions: ["swap"],
   settings: [
-    { field: "pools", label: "Pools", help: "The only pools an agent may trade in. Any other pool is refused by the chain." },
+    { field: "pools", label: "Pools", help: "Any genuine Minswap pool, or only the pools you pick. The chain refuses every other pool." },
     { field: "maxSlippageBps", label: "Max slippage", help: "Worst price an order may accept, below the pool's current price. The chain checks it against the pool itself." },
     { field: "maxBatcherFee", label: "Max batcher fee", help: "The most an order may pay Minswap's batchers. An order offering less than batchers accept never fills." },
     { field: "maxOrderTtlMs", label: "Order lifetime", help: "How long an order may wait for a batcher. After that, anyone can refund it to the vault." },

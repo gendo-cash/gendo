@@ -92,14 +92,20 @@ describe("what creating a vault builds", () => {
 import { minswapForm, minswapProblems, type MinswapForm } from "../src/owner/validate.ts";
 
 describe("the Minswap settings form", () => {
-  const filled: MinswapForm = { pools: ["4c50"], slippage: "3", fee: "2", hours: "24", tip: "0.5" };
+  const filled: MinswapForm = { scope: "only", pools: ["4c50"], slippage: "3", fee: "2", hours: "24", tip: "0.5" };
   it("starts empty: no defaults", () => {
-    expect(minswapForm()).toEqual({ pools: [], slippage: "", fee: "", hours: "", tip: "" });
+    expect(minswapForm()).toEqual({ scope: "", pools: [], slippage: "", fee: "", hours: "", tip: "" });
     expect(minswapProblems(minswapForm()).length).toBeGreaterThanOrEqual(5);
+    expect(minswapProblems(minswapForm())).toContain("Choose any pool or only the pools you pick.");
   });
   it("turns a filled form into the chain's settings", () => {
     expect(minswapProblems(filled)).toEqual([]);
     expect(minswapForm.toSettings(filled)).toEqual({ pools: ["4c50"], maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 86_400_000n, maxCancelTip: 500_000n });
+  });
+  it("any pool: no pool list needed, and the picked pools are dropped", () => {
+    const any: MinswapForm = { ...filled, scope: "any" };
+    expect(minswapProblems({ ...any, pools: [] })).toEqual([]);
+    expect(minswapForm.toSettings(any).pools).toBe("any");
   });
   it("refuses what the chain would refuse or what can't work", () => {
     expect(minswapProblems({ ...filled, slippage: "21" })).toContain("Max slippage is at most 20%.");
@@ -110,7 +116,8 @@ describe("the Minswap settings form", () => {
     expect(minswapProblems({ ...filled, tip: "x" })).toContain("Cancel tip must be an ADA amount (0 is fine).");
   });
   it("shows current settings when editing", () => {
-    expect(minswapForm({ pools: ["4c50"], maxSlippageBps: 150n, maxBatcherFee: 1_500_000n, maxOrderTtlMs: 7_200_000n, maxCancelTip: 0n })).toEqual({ pools: ["4c50"], slippage: "1.5", fee: "1.5", hours: "2", tip: "0" });
+    expect(minswapForm({ pools: ["4c50"], maxSlippageBps: 150n, maxBatcherFee: 1_500_000n, maxOrderTtlMs: 7_200_000n, maxCancelTip: 0n })).toEqual({ scope: "only", pools: ["4c50"], slippage: "1.5", fee: "1.5", hours: "2", tip: "0" });
+    expect(minswapForm({ pools: "any", maxSlippageBps: 150n, maxBatcherFee: 1_500_000n, maxOrderTtlMs: 7_200_000n, maxCancelTip: 0n }).scope).toBe("any");
   });
 });
 

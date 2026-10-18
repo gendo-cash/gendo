@@ -33,7 +33,7 @@ export function decodeRecipe(x: unknown): Recipe | undefined {
       case "revoke": return okSigners && typeof r.unit === "string" ? r : undefined;
       case "apps": {
         const s = r.settings;
-        const okSettings = !!s && Array.isArray(s.pools) && s.pools.every((p) => typeof p === "string") && [s.maxSlippageBps, s.maxBatcherFee, s.maxOrderTtlMs, s.maxCancelTip].every((x) => typeof x === "bigint");
+        const okSettings = !!s && (s.pools === "any" || (Array.isArray(s.pools) && s.pools.every((p) => typeof p === "string"))) && [s.maxSlippageBps, s.maxBatcherFee, s.maxOrderTtlMs, s.maxCancelTip].every((x) => typeof x === "bigint");
         if (!okSigners || r.name !== "minswap" || !["enable", "update", "disable"].includes(r.action)) return undefined;
         return r.action === "disable" || okSettings ? r : undefined;
       }

@@ -1,7 +1,7 @@
 use aiken/crypto.{ScriptHash}
 use apps/minswap/fixtures as mfx
 use apps/minswap/place
-use apps/minswap/types.{Deployment, MinswapSettings}
+use apps/minswap/types.{Deployment, MinswapSettings, OnlyPools}
 use vault/fixtures
 use vault/types.{AppConfig} as vt
 use cardano/address.{Credential, Script}
@@ -76,7 +76,7 @@ test bench_minswap_place_3_orders() {
   let s: Data =
     MinswapSettings {
       ..mfx.settings(),
-      pools: [#"01", #"02", #"03", #"04", #"05", #"06", #"07", mfx.lp_name],
+      pools: OnlyPools([#"01", #"02", #"03", #"04", #"05", #"06", #"07", mfx.lp_name]),
     }
   let other = fn(n: ByteArray, i: Int) { AppConfig { name: n, adapter: fixtures.key(140 + i), order_script: fixtures.key(150 + i), settings: Void } }
   let o = mfx.order(mfx.order_datum())

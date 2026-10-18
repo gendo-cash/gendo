@@ -4,6 +4,7 @@
 use aiken/cbor
 use aiken/primitive/bytearray
 use apps/minswap/fixtures as mfx
+use apps/minswap/types.{AnyPool, MinswapSettings} as mst
 use vault/allowance_fixtures as afx
 use vault/fixtures.{cfg_2_of_3}
 use vault/types.{AgentTrade, AllowanceDatum, ConfigDatum, SpendRedeemer}
@@ -19,6 +20,10 @@ test golden_order() {
 
 test golden_settings() {
   hex(@"settings", mfx.settings())
+}
+
+test golden_settings_any() {
+  hex(@"settings_any", MinswapSettings { ..mfx.settings(), pools: AnyPool })
 }
 
 test golden_pool() {

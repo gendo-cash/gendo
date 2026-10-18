@@ -152,10 +152,18 @@ pub const max_orders: Int = 3
 /// 20%: the most slippage owners may allow.
 pub const max_slippage: Int = 2000
 
+/// Which pools the agent may trade in, as the owners chose.
+pub type Pools {
+  /// Only these, by LP asset name (the LP policy is the deployment's).
+  OnlyPools(List<AssetName>)
+  /// Any genuine Minswap pool. The price floor then reads a pool anyone can
+  /// create, so a hijacked agent could lose its budget to a rigged one.
+  AnyPool
+}
+
 /// The vault's rules for Minswap (`AppConfig.settings`), set by the owners.
 pub type MinswapSettings {
-  /// Allowed pools, by LP asset name (the LP policy is the deployment's).
-  pools: List<AssetName>,
+  pools: Pools,
   max_slippage_bps: Int,
   max_batcher_fee: Int,
   max_order_ttl_ms: Int,

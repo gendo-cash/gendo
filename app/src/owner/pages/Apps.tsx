@@ -79,7 +79,7 @@ function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: Config
       </div>
       {enabled && current && !editing && (
         <>
-          <div className="kvrow"><span>Pools</span><span>{current.pools.map(label).join(", ")}</span></div>
+          <div className="kvrow"><span>Pools</span><span>{current.pools === "any" ? "Any Minswap pool" : current.pools.map(label).join(", ")}</span></div>
           <div className="kvrow"><span>Max slippage</span><span>{Number(current.maxSlippageBps) / 100}%</span></div>
           <div className="kvrow"><span>Max batcher fee</span><span>{ada(current.maxBatcherFee)} ADA</span></div>
           <div className="kvrow"><span>Order lifetime</span><span>{Number(current.maxOrderTtlMs) / 3_600_000} h</span></div>
@@ -97,12 +97,21 @@ function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: Config
           <div className="field">
             <label>Pools</label>
             <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {network.pools.map((p) => (
-                <label key={p.lpName} style={{ display: "flex", gap: 8, alignItems: "center", padding: 0 }}>
+              <label style={{ display: "flex", gap: 8, alignItems: "center", padding: 0 }}>
+                <input type="radio" name="ms-scope" checked={f.scope === "any"} onChange={() => setF({ ...f, scope: "any" })} />
+                Any Minswap pool
+              </label>
+              <label style={{ display: "flex", gap: 8, alignItems: "center", padding: 0 }}>
+                <input type="radio" name="ms-scope" checked={f.scope === "only"} onChange={() => setF({ ...f, scope: "only" })} />
+                Only these pools
+              </label>
+              {f.scope === "only" && network.pools.map((p) => (
+                <label key={p.lpName} style={{ display: "flex", gap: 8, alignItems: "center", padding: "0 0 0 24px" }}>
                   <input type="checkbox" checked={f.pools.includes(p.lpName)} onChange={(e) => setF({ ...f, pools: e.target.checked ? [...f.pools, p.lpName] : f.pools.filter((x) => x !== p.lpName) })} />
                   {p.label}
                 </label>
               ))}
+              {f.scope === "any" && <ErrorNote error="A hijacked agent could lose up to its budget to a pool with a rigged price: the price floor reads that pool's own price." />}
             </span>
             <span className="hint">{help("pools")}</span>
           </div>

@@ -80,7 +80,7 @@ The name is 限度 (*gendo*), Japanese for a limit, as in 限度額, the spendin
 - An agent can only pay allowlisted addresses and only move allowlisted assets.
 - Allowances expire on their own and can be revoked at any time, even if the agent has corrupted its own state.
 - Rotating owners never changes the vault's address.
-- An agent can swap only on an app the owners enabled and allowed for it, only in approved pools, never below the owners' worst acceptable price, and what comes back always goes to the vault's treasury.
+- An agent can swap only on an app the owners enabled and allowed for it, only in pools the owners allow (a list, or any Minswap pool if they choose), never below the owners' worst acceptable price, and what comes back always goes to the vault's treasury.
 
 What is proven today: accounts payable (an agent paying invoices to approved payees) and Minswap swaps on the local devnet, through the adapter described in [Apps](#apps-defi-inside-the-budget). On preprod the adapter isn't deployed yet, and no swap has been filled by a real batcher yet.
 
@@ -103,7 +103,7 @@ What is proven today: accounts payable (an agent paying invoices to approved pay
 ```bash
 # on-chain: build, tests (unit + property + adversarial), mutation suite, budget check
 scripts/aiken.sh build && scripts/aiken.sh check
-scripts/mutate-all.sh            # every guard must be load-bearing (134 mutations, the Minswap adapter included)
+scripts/mutate-all.sh            # every guard must be load-bearing (138 mutations, the Minswap adapter included)
 scripts/budget.sh                # max-size paths < 50% of the per-tx limit (a trade: vault + adapter together, 48%)
 
 # SDK: unit + emulator flows
@@ -189,10 +189,11 @@ Ported code is **not** audited code. The audit covers Sundae's composition at co
 
 An **app** is a DeFi protocol gendo supports through one small on-chain **adapter**. Minswap V2 swaps are the first; it is the only DEX on preprod whose orders a script can own and refund.
 
-- **Owners enable it per vault** (Apps tab, or `cli/vault app enable minswap ...`), with their rules: the pools allowed, the max slippage, the max batcher fee, the order lifetime and the cancel tip. There are no defaults: owners set every value. It's a settings change, signed at the threshold.
+- **Owners enable it per vault** (Apps tab, or `cli/vault app enable minswap ...`), with their rules: which pools (any Minswap pool, or only the ones they pick), the max slippage, the max batcher fee, the order lifetime and the cancel tip. There are no defaults: owners set every value. It's a settings change, signed at the threshold.
 - **Owners allow it per agent** in its budget (`--apps minswap` on the CLI).
 - **The agent swaps** with the MCP `swap` tool (or `cli/vault agent swap`). Everything that leaves the allowance counts against its limits: the swap amount, Minswap's 2 ADA deposit, the batcher fee, the cancel tip and the tx fee. **Proceeds and refunds go to the vault's treasury**, which only owners spend, and never restore the agent's budget: the budget limits turnover, not exposure.
 - **The chain checks every order** (the Minswap adapter, `onchain/lib/apps/minswap/place.ak`): only this adapter can cancel it; both receivers are the vault's own address with no datum; only swap-exact-in for a stated amount, cancelled if the price misses; an allowed pool, proven genuine by Minswap's pool token at Minswap's pool script **and** by its own two assets deriving the order's LP name (anyone can create a pool that holds another pool's LP token, so the token alone proves nothing); a bounded batcher fee, lifetime and tip; no extra tokens or reference script; and a **price floor read from the pool's own reserves**: `minimum_receive ≥ fair × (1 − slippage)`, with Minswap's formula. No oracle. The floor protects against the price moving between placement and fill. It does not stop a stolen agent key that first skews the pool itself and then trades against it: that agent is bounded only by its budget's limits.
+- **Any pool is the owners' call, with a known risk.** With "any Minswap pool", the floor reads a pool anyone can create. A hijacked or tricked agent can then trade its budget into a pool someone set up with a rigged price, and lose up to that budget. The pool still has to be a genuine Minswap pool (the checks above). A pool list closes this; it holds at most 8 pools. The agent names a pool outside the catalogue by its two assets (`lovelace/<policy id + name>`) or its LP asset name.
 - **Orders expire.** After the lifetime, anyone can refund an unfilled order to the vault through Minswap's own path (tested against Minswap's own validators). Cancelling earlier isn't built yet.
 
 The **catalogue** (`sdk/src/core/apps/catalogue.ts`) lists the supported apps per network. Being listed grants nothing: a vault trusts an adapter only once its owners put the adapter's hash in their config.
@@ -414,7 +415,7 @@ Not built yet. None of this is a guarantee until it ships with tests and an audi
    - the `allowanceName` CBOR encoding must match Aiken `cbor.serialise`;
    - the intent hash binding;
    - signer policy decoding (it parses untrusted CBOR).
-8. **`agent_trade` and the Minswap adapter** (`onchain/lib/apps/minswap/place.ak`). Check that an order can't name anyone but the vault, that the pool used for the floor is the order's genuine pool, that the floor's integer arithmetic matches Minswap's, and that `in − continuing` still counts every order in full. The vendored Minswap types must match `minswap/minswap-dex-v2@c3293ad` exactly.
+8. **`agent_trade` and the Minswap adapter** (`onchain/lib/apps/minswap/place.ak`). Check that an order can't name anyone but the vault, that the pool used for the floor is the order's genuine pool (with a pool list and with "any pool"), that the floor's integer arithmetic matches Minswap's, and that `in − continuing` still counts every order in full. The vendored Minswap types must match `minswap/minswap-dex-v2@c3293ad` exactly.
 9. **Tooling.** Run `scripts/mutate-all.sh`. Every listed guard must be killed by a test. Add mutations for anything you think is untested.
 
 ## Repository layout and versions

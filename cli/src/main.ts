@@ -235,7 +235,9 @@ const appsArg = (x?: string) => (x === undefined || x === "none" ? [] : list(x))
 /** Minswap settings from flags. Every one is required: owners choose each value (no defaults). */
 function minswapSettingsArg(lucid: LucidEvolution, v: { pools?: string; slippage?: string; fee?: string; ttl?: string; tip?: string }): minswap.MinswapSettings {
   const found = appFor("minswap", lucid.config().network!) ?? die(`Minswap isn't available on ${lucid.config().network}`);
-  const pools = list(v.pools ?? die("--pools <lp name or label,...> required")).map(
+  const given = v.pools ?? die("--pools any|<lp name or label,...> required");
+  // "any": any genuine Minswap pool (a hijacked agent could then lose its budget to a rigged pool).
+  const pools = given === "any" ? ("any" as const) : list(given).map(
     (p) => found!.network.pools.find((x) => x.label === p || x.lpName === p)?.lpName ?? (/^[0-9a-f]{2,64}$/.test(p) ? p : die(`unknown pool ${p}`)),
   );
   return {
@@ -637,14 +639,17 @@ const commands: Record<string, (argv: string[]) => Promise<void>> = {
     const collateral = (await lucid.utxosAt(agentAddr)).find((u) => Object.keys(u.assets).length === 1 && !u.scriptRef) ?? die(`agent ${agentAddr} needs a pure-ADA UTxO for collateral`);
     lucid.selectWallet.fromAddress(agentAddr, [collateral!]);
     const [token, qty] = v.asset ? v.asset.split(":") : [];
+    const unitOfAsset = (a: { policy: string; name: string }) => (a.policy === "" ? "lovelace" : a.policy + a.name);
     const sign = (cbor: string) =>
       v["signer-socket"] ? requestWitness(v["signer-socket"], cbor) : cosign.witness(lucid, cbor, loadKey(v.agent ?? die("--signer-socket or --agent <key> required")).privateKey);
     try {
+      // The live pool says which side is A (pools outside the catalogue too).
+      const live = await minswap.findPool({ lucid }, lpName!);
       const r = await tradeOnce(
         {
           lucid, vault, allowanceUnit: unit, collateral: collateral!, refScript: await refScriptOf(lucid), pool: lpName,
           amountIn: token ? BigInt(qty!) : ada(v.ada ?? die("--ada N or --asset unit:qty required"))!,
-          aToB: token ? pool?.assetA === token : pool ? pool.assetA === "lovelace" : true,
+          aToB: unitOfAsset(live.pool.assetA) === (token ?? "lovelace"),
           intentId, purpose: v.purpose!, ref: intentId,
         },
         { q: chainQuery(), journal: journal(), sign },
@@ -826,7 +831,7 @@ const HELP = `vault <command>
   allowance grant --agent k --dest addr1,addr2 --cap lovelace:WINDOW_ADA:TX_ADA [--period 1d] [--expires 30d]
                   [--max-fee 2] --fund N [--from-treasury] --propose a --sign a,b
   allowance list | edit <unit> ... [--apps minswap|none] | revoke <unit> --propose a --sign a,b
-  app enable|update minswap --pools <lp|label,...> --slippage <pct> --fee <ada> --order-ttl <dur> --tip <ada> --propose a --sign a,b
+  app enable|update minswap --pools any|<lp|label,...> --slippage <pct> --fee <ada> --order-ttl <dur> --tip <ada> --propose a --sign a,b
       (every flag required: no defaults)   app disable minswap --propose a --sign a,b   app list
   agent swap <unit> --pool <lp|label> (--ada N | --asset unit:qty) --intent-id ID --purpose "..." (--signer-socket path | --agent k)
   agent spend <unit> --to addr --ada N --intent-id ID --purpose "..." (--signer-socket path | --agent k) [--skip-preflight]

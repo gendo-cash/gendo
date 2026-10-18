@@ -20,7 +20,9 @@ import { requestWitness } from "./signer/client.js";
 import { makeVault, type Vault } from "../core/vault.js";
 import { appFor } from "../core/apps/catalogue.js";
 import { minswapAdapter } from "../core/apps/minswap/adapter.js";
-import { orderDatumFromData } from "../core/apps/minswap/data.js";
+import { orderDatumFromData, type MinswapPool } from "../core/apps/minswap/data.js";
+import { lpNameOf } from "../core/apps/minswap/quote.js";
+import { findPool } from "../core/apps/minswap/trade.js";
 import { minswapSettings } from "../core/apps/minswap/rules.js";
 import { orderStatus } from "../core/apps/minswap/status.js";
 import { tradeOnce } from "../core/trade.js";
@@ -119,7 +121,9 @@ function appsOf(network: Network, granted: string[], config: Parameters<typeof m
     return [{
       app: name,
       title: found.app.title,
-      pools: s.pools.map((lp) => found.network.pools.find((p) => p.lpName === lp)?.label ?? lp),
+      // "any": any genuine Minswap pool, named by label, LP asset name or "<unit>/<unit>".
+      pools: s.pools === "any" ? ("any" as const) : s.pools.map((lp) => found.network.pools.find((p) => p.lpName === lp)?.label ?? lp),
+      ...(s.pools === "any" ? { known_pools: found.network.pools.map((p) => p.label) } : {}),
       max_slippage_pct: Number(s.maxSlippageBps) / 100,
       max_batcher_fee_ada: ada(s.maxBatcherFee),
       max_order_lifetime_minutes: Number(s.maxOrderTtlMs) / 60_000,
@@ -267,8 +271,7 @@ export async function swap(s: AgentSession, p: SwapRequest) {
     if (p.app !== "minswap") throw Object.assign(new Error(`unknown app ${p.app}`), { code: "APP" });
     const found = appFor("minswap", network);
     if (!found) throw Object.assign(new Error(`Minswap isn't available on ${network}`), { code: "APP" });
-    const pool = found.network.pools.find((x) => x.label === p.pool || x.lpName === p.pool);
-    if (!pool) throw Object.assign(new Error(`unknown pool ${p.pool}; use one from get_budget`), { code: "APP" });
+    const pool = await resolvePool(s.lucid, found.network, p.pool);
     // Selling ADA (amount_ada) or one of the pool's two assets (asset); anything else is refused, never guessed.
     const sellingAda = !p.asset;
     const unitIn = sellingAda ? "lovelace" : p.asset!.unit;
@@ -307,6 +310,35 @@ export async function swap(s: AgentSession, p: SwapRequest) {
   }
 }
 
+const unitOfAsset = (a: MinswapPool["assetA"]) => (a.policy === "" ? "lovelace" : a.policy + a.name);
+
+/**
+ * A pool by catalogue label, LP asset name, or its two assets ("lovelace/<unit>", either order).
+ * Its assets come from the live pool on chain, so pools outside the catalogue work too.
+ */
+async function resolvePool(lucid: LucidEvolution, network: NonNullable<ReturnType<typeof appFor>>["network"], name: string) {
+  const known = network.pools.find((x) => x.label === name || x.lpName === name);
+  const units = name.split("/").map((u) => u.trim()).map((u) => (u === "ADA" ? "lovelace" : u));
+  const asAsset = (u: string) => (u === "lovelace" ? { policy: "", name: "" } : { policy: u.slice(0, 56), name: u.slice(56) });
+  const candidates = known
+    ? [known.lpName]
+    : /^[0-9a-f]{64}$/.test(name)
+      ? [name]
+      : units.length === 2 && units.every((u) => u === "lovelace" || /^[0-9a-f]{56,120}$/.test(u))
+        ? [0, 1].map((i) => lpNameOf({ assetA: asAsset(units[i]!), assetB: asAsset(units[1 - i]!) }))
+        : [];
+  if (!candidates.length) throw Object.assign(new Error(`unknown pool ${name}; name it by label, LP asset name or "lovelace/<unit>"`), { code: "APP" });
+  for (const lpName of candidates) {
+    try {
+      const { pool } = await findPool({ lucid }, lpName);
+      return { lpName, label: known?.label ?? name, assetA: unitOfAsset(pool.assetA), assetB: unitOfAsset(pool.assetB) };
+    } catch {
+      // not this one (or the other asset order)
+    }
+  }
+  throw Object.assign(new Error(`no Minswap pool ${name}`), { code: "APP" });
+}
+
 /** Where a swap stands: pending, filled (and what arrived at the vault) or refunded. */
 export async function orderStatusOf(s: AgentSession, tx: string) {
   const network = s.lucid.config().network as Network;
@@ -316,7 +348,7 @@ export async function orderStatusOf(s: AgentSession, tx: string) {
   const placed = (await get(`/txs/${tx}/utxos`)) as { outputs?: { address: string; inline_datum?: string | null }[] } | undefined;
   const o = placed?.outputs?.find((x) => x.address === found.network.orderAddress);
   const order = o?.inline_datum ? orderDatumFromData(o.inline_datum) : null;
-  const pool = order ? found.network.pools.find((p) => p.lpName === order.lp.name) : undefined;
+  const pool = order ? await resolvePool(s.lucid, found.network, order.lp.name).catch(() => undefined) : undefined;
   if (!order || !pool) return { status: "unknown" as const, note: "That isn't one of this vault's Minswap orders." };
   const [inUnit, outUnit] = order.aToB ? [pool.assetA, pool.assetB] : [pool.assetB, pool.assetA];
   const st = await orderStatus(get, { orderTx: tx, orderAddress: found.network.orderAddress, vaultAddress: s.vault.address, inUnit, outUnit, minimumReceive: order.minimumReceive });

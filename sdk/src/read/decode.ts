@@ -111,10 +111,11 @@ export function orderFromCbor(hex: string): { adapter: string; lpPolicy: string;
 }
 
 /** The vault's Minswap settings (`AppConfig.settings`), without Lucid; null if unreadable. */
-export function minswapSettingsFromCbor(hex: string): { pools: string[]; maxSlippageBps: bigint; maxBatcherFee: bigint; maxOrderTtlMs: bigint; maxCancelTip: bigint } | null {
+export function minswapSettingsFromCbor(hex: string): { pools: "any" | string[]; maxSlippageBps: bigint; maxBatcherFee: bigint; maxOrderTtlMs: bigint; maxCancelTip: bigint } | null {
   try {
-    const [pools, slip, fee, ttl, tip] = asConstr(decodePlutusData(hex), 0, 5);
-    return { pools: asList(pools!).map(asBytes), maxSlippageBps: asInt(slip!), maxBatcherFee: asInt(fee!), maxOrderTtlMs: asInt(ttl!), maxCancelTip: asInt(tip!) };
+    const [scope, slip, fee, ttl, tip] = asConstr(decodePlutusData(hex), 0, 5);
+    const pools = scope!.k === "constr" && scope!.index === 1 ? (asConstr(scope!, 1, 0), "any" as const) : asList(asConstr(scope!, 0, 1)[0]!).map(asBytes);
+    return { pools, maxSlippageBps: asInt(slip!), maxBatcherFee: asInt(fee!), maxOrderTtlMs: asInt(ttl!), maxCancelTip: asInt(tip!) };
   } catch {
     return null;
   }

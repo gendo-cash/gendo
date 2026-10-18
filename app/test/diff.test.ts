@@ -26,6 +26,11 @@ describe("detailOf: apps", () => {
     expect(d.rows).toContainEqual({ k: "Minswap max slippage", now: "—", next: "3%", changed: true });
     expect(d.rows).toContainEqual({ k: "Minswap order lifetime", now: "—", next: "24 h", changed: true });
   });
+  it("allowing any pool says so", () => {
+    const any = { ...app, settings: settingsToData({ pools: "any", maxSlippageBps: 300n, maxBatcherFee: 2_000_000n, maxOrderTtlMs: 86_400_000n, maxCancelTip: 500_000n }) };
+    const d = detailOf({ ...base, changes: [{ kind: "config", before: { ...c, apps: [app] }, after: { ...c, apps: [any] } }] }, ctx);
+    expect(d.rows).toContainEqual({ k: "Minswap pools", now: "ADA ↔ NACRE", next: "any Minswap pool", changed: true });
+  });
   it("a different adapter or order script shows as rows, with a warning when it isn't gendo's", () => {
     const ctxN = { ...ctx, appScripts: { minswap: { adapter: h(0xad), orderScript: h(0x0d) } } };
     const swapped = { ...app, adapter: h(0xee) };

@@ -8,9 +8,9 @@ use aiken/crypto.{ScriptHash}
 use aiken/primitive/bytearray
 use apps/minswap/math
 use apps/minswap/types.{
-  Deployment, EODNoDatum, MinswapSettings, OAMWithdrawScript, OrderDatum,
-  PoolDatum, SAOSpecificAmount, SwapExactIn, fee_denominator, max_orders,
-  max_pools, max_slippage, pool_auth_name,
+  AnyPool, Deployment, EODNoDatum, MinswapSettings, OAMWithdrawScript,
+  OnlyPools, OrderDatum, PoolDatum, SAOSpecificAmount, SwapExactIn,
+  fee_denominator, max_orders, max_pools, max_slippage, pool_auth_name,
 } as ms
 use cardano/address.{Address, Script}
 use cardano/assets.{AssetName}
@@ -70,8 +70,20 @@ pub fn place(own: ScriptHash, dep: Deployment, tx: Transaction) -> Bool {
 /// the per-order checks below.
 fn valid_settings(s: MinswapSettings) -> Bool {
   and {
-    list.length(s.pools) <= max_pools,
+    when s.pools is {
+      OnlyPools(lps) -> list.length(lps) <= max_pools
+      AnyPool -> True
+    },
     s.max_slippage_bps <= max_slippage,
+  }
+}
+
+/// Whether the owners allow this pool. Either way, `genuine_pool` below
+/// requires it to be a real Minswap pool.
+fn allowed(pools: ms.Pools, lp: AssetName) -> Bool {
+  when pools is {
+    OnlyPools(lps) -> list.has(lps, lp)
+    AnyPool -> True
   }
 }
 
@@ -105,7 +117,7 @@ fn valid_order(
   expect amount > 0
   // An allowed pool, a bounded batcher fee, a bounded lifetime and tip.
   expect od.lp_asset.policy_id == dep.lp_policy
-  expect list.has(s.pools, od.lp_asset.asset_name)
+  expect allowed(s.pools, od.lp_asset.asset_name)
   expect od.max_batcher_fee >= 0
   expect od.max_batcher_fee <= s.max_batcher_fee
   expect Some((expiry, tip)) = od.expiry_setting_opt

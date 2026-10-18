@@ -135,8 +135,9 @@ export function createOptions(f: CreateForm, me: string, net: "Preprod" | "Custo
 
 // --- the Minswap settings form (no defaults: every field starts empty) ---
 
-export type MinswapForm = { pools: string[]; slippage: string; fee: string; hours: string; tip: string };
-type MinswapSettingsBig = { pools: string[]; maxSlippageBps: bigint; maxBatcherFee: bigint; maxOrderTtlMs: bigint; maxCancelTip: bigint };
+/** `scope` starts empty: owners choose "any" pool or "only" the picked ones. */
+export type MinswapForm = { scope: "" | "any" | "only"; pools: string[]; slippage: string; fee: string; hours: string; tip: string };
+type MinswapSettingsBig = { pools: "any" | string[]; maxSlippageBps: bigint; maxBatcherFee: bigint; maxOrderTtlMs: bigint; maxCancelTip: bigint };
 
 const decimal = (n: bigint, unit: bigint) => {
   const whole = n / unit;
@@ -146,9 +147,10 @@ const decimal = (n: bigint, unit: bigint) => {
 
 /** An empty form, or the current settings when editing. */
 export function minswapForm(current?: MinswapSettingsBig): MinswapForm {
-  if (!current) return { pools: [], slippage: "", fee: "", hours: "", tip: "" };
+  if (!current) return { scope: "", pools: [], slippage: "", fee: "", hours: "", tip: "" };
   return {
-    pools: current.pools,
+    scope: current.pools === "any" ? "any" : "only",
+    pools: current.pools === "any" ? [] : current.pools,
     slippage: decimal(current.maxSlippageBps, 100n),
     fee: decimal(current.maxBatcherFee, 1_000_000n),
     hours: decimal(current.maxOrderTtlMs, 3_600_000n),
@@ -160,7 +162,7 @@ const pctToBps = (s: string) => (/^\d{1,2}(\.\d{1,2})?$/.test(s.trim()) ? BigInt
 const hoursToMs = (s: string) => (/^\d{1,4}(\.\d{1,2})?$/.test(s.trim()) ? BigInt(Math.round(Number(s) * 3_600_000)) : undefined);
 
 minswapForm.toSettings = (f: MinswapForm): MinswapSettingsBig => ({
-  pools: f.pools,
+  pools: f.scope === "any" ? "any" : f.pools,
   maxSlippageBps: pctToBps(f.slippage)!,
   maxBatcherFee: toLovelace(f.fee)!,
   maxOrderTtlMs: hoursToMs(f.hours)!,
@@ -169,8 +171,9 @@ minswapForm.toSettings = (f: MinswapForm): MinswapSettingsBig => ({
 
 export function minswapProblems(f: MinswapForm): string[] {
   const p: string[] = [];
-  if (!f.pools.length) p.push("Pick at least one pool.");
-  if (f.pools.length > 8) p.push("At most 8 pools.");
+  if (!f.scope) p.push("Choose any pool or only the pools you pick.");
+  if (f.scope === "only" && !f.pools.length) p.push("Pick at least one pool.");
+  if (f.scope === "only" && f.pools.length > 8) p.push("At most 8 pools.");
   const bps = pctToBps(f.slippage);
   if (bps === undefined) p.push("Max slippage must be a percentage, e.g. 3.");
   else if (bps <= 0n) p.push("Max slippage must be more than 0%.");

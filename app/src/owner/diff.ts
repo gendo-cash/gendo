@@ -74,7 +74,7 @@ function appFields(app: { name: string; settings: string; adapter: string; order
     const s = settingsFromData(app.settings);
     return {
       ...scripts,
-      pools: s.pools.map((lp) => poolByLp(lp)?.pool.label ?? lp).join(", "),
+      pools: s.pools === "any" ? "any Minswap pool" : s.pools.map((lp) => poolByLp(lp)?.pool.label ?? lp).join(", "),
       "max slippage": `${Number(s.maxSlippageBps) / 100}%`,
       "max batcher fee": `${ada(s.maxBatcherFee)} ADA`,
       "order lifetime": hours(s.maxOrderTtlMs),

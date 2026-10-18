@@ -38,6 +38,7 @@ try {
   // Owner A enables Minswap on the vault (every rule typed: no defaults); owner B signs.
   await A.open(`${APP}/v/${POLICY}/apps`);
   await A.click(/^Enable Minswap$/);
+  await A.check(/^Only these pools$/);
   await A.check(/ADA ↔ TEST/);
   for (const [id, v] of [["ms-slippage", "3"], ["ms-fee", "2"], ["ms-hours", "24"], ["ms-tip", "0.5"]]) await A.fill(id, v);
   await A.click(/^Review and propose$/);

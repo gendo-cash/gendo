@@ -176,3 +176,4 @@ select:hover{border-color:#8f8578}
 .doc-foot{padding-top:24px}
 .doc-foot p{margin:0;font-size:13px;line-height:1.6;color:#8f8578;max-width:680px}
 @media (max-width:640px){.pub-path{display:none}.doc{padding:24px 16px 48px}.doc h1{font-size:30px}.doc-lede{font-size:16px}.ledger li{grid-template-columns:minmax(0,1fr) auto}.ledger-date{grid-column:1/-1}.mandate{gap:12px}}
+@media (max-width:640px){.field{grid-template-columns:minmax(0,1fr)}.field .hint{grid-column:1}.field label{padding-top:0}}

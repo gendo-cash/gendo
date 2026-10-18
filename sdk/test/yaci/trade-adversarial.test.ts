@@ -93,3 +93,17 @@ describe("trades the vault refuses", () => {
   it("T8 no adapter withdrawal", async () => expectRefused(await trade({ withdraw: false })));
   it("T9 the order paid to another script", async () => expectRefused(await trade({ to: w.refHolder })));
 });
+
+describe("with any pool allowed", () => {
+  beforeAll(async () => {
+    const any = minswapAppConfig(NETWORK, { ...settings, pools: "any" });
+    w.lucid.selectWallet.fromPrivateKey(w.a.privateKey);
+    await signSubmit(w.lucid, async () => owner.updateApp(w.lucid, w.vault, await readConfig(w.lucid, w.vault), any, [w.a.pkh, w.b.pkh]), [w.a, w.b]);
+  }, 600_000);
+  it("the honest trade is still accepted", async () => {
+    const r = await trade();
+    expect(r.ok, r.body.slice(0, 400)).toBe(true);
+  });
+  it("T10 a pool with no genuine Minswap pool behind it", async () => expectRefused(await trade({ datum: (u) => orderDatumToData({ ...honestOrder(u), lp: { policy: found.network.deployment.lpPolicy, name: "4c59" } }) })));
+  it("T11 minimum one unit under the price floor", async () => expectRefused(await trade({ datum: (u) => orderDatumToData({ ...honestOrder(u), minimumReceive: honestOrder(u).minimumReceive - 1n }) })));
+});

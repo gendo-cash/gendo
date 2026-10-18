@@ -179,7 +179,7 @@ function appsLine(apps: { name: string; settings: string }[]): string {
   const parts = apps.flatMap((a) => {
     const s = a.name === "minswap" ? minswapSettingsFromCbor(a.settings) : null;
     if (!s) return [];
-    const pools = s.pools.map((lp) => poolByLp(lp)?.pool.label ?? `${lp.slice(0, 8)}…`).join(", ");
+    const pools = s.pools === "any" ? "any pool" : s.pools.map((lp) => poolByLp(lp)?.pool.label ?? `${lp.slice(0, 8)}…`).join(", ");
     return [`on Minswap (${pools}), never more than ${Number(s.maxSlippageBps) / 100}% below the pool's price`];
   });
   return parts.length ? ` Agents it allows may swap ${parts.join("; ")}.` : "";

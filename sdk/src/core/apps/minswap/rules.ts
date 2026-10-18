@@ -22,6 +22,9 @@ export function minswapSettings(config: ConfigDatum, adapter: string): MinswapSe
   }
 }
 
+/** Whether the owners allow this pool (either way, it must be a genuine Minswap pool). */
+export const poolAllowed = (s: MinswapSettings, lpName: string) => s.pools === "any" || s.pools.includes(lpName);
+
 export function tradeProblems(t: {
   config: ConfigDatum;
   allowance: AllowanceDatum;
@@ -43,12 +46,12 @@ export function tradeProblems(t: {
   if (!t.allowance.apps.includes(app.name)) return ["this agent isn't allowed to use Minswap"];
   const s = minswapSettings(t.config, t.adapter);
   if (!s) return ["the vault's Minswap settings are unreadable"];
-  if (s.pools.length > MAX_POOLS || s.maxSlippageBps > MAX_SLIPPAGE_BPS) return ["the vault's Minswap settings are out of range"];
+  if ((s.pools !== "any" && s.pools.length > MAX_POOLS) || s.maxSlippageBps > MAX_SLIPPAGE_BPS) return ["the vault's Minswap settings are out of range"];
   const o = t.order;
   if (o.adapter !== t.adapter) p.push("the order's canceller isn't the adapter");
   if (!sameAddress(o.receiver, t.vault)) p.push("the order doesn't pay the vault");
   if (o.amount <= 0n) p.push("the swap amount must be positive");
-  if (o.lp.policy !== t.lpPolicy || !s.pools.includes(o.lp.name)) p.push("that pool isn't allowed");
+  if (o.lp.policy !== t.lpPolicy || !poolAllowed(s, o.lp.name)) p.push("that pool isn't allowed");
   // The floor is read from this pool: its own assets must derive the order's LP name (else it's another pool).
   if (lpNameOf(t.pool) !== o.lp.name) p.push("the pool data doesn't belong to the order's pool");
   if (o.maxBatcherFee < 0n || o.maxBatcherFee > s.maxBatcherFee) p.push(`batcher fee over the vault's ${s.maxBatcherFee} lovelace`);
