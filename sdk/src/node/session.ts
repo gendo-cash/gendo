@@ -287,7 +287,8 @@ export async function swap(s: AgentSession, p: SwapRequest) {
     const [adapterRef] = found.network.adapterRef ? await s.lucid.utxosByOutRef([found.network.adapterRef]) : [];
     const r = await tradeOnce(
       {
-        lucid: s.lucid, vault: s.vault, allowanceUnit: s.unit, collateral: w.collateral, refScript: w.refScript, adapterRef: adapterRef?.scriptRef ? adapterRef : undefined,
+        lucid: s.lucid, vault: s.vault, allowanceUnit: s.unit, collateral: w.collateral, refScript: w.refScript, // A stale reference (an older adapter) is ignored: the current script is attached inline instead.
+        adapterRef: adapterRef?.scriptRef?.script === minswapAdapter(network).script.script ? adapterRef : undefined,
         pool: pool.lpName, amountIn, aToB, intentId: p.intent_id, purpose: p.purpose, ref: p.intent_id,
       },
       { q: s.q, journal: s.journal, sign: s.sign },

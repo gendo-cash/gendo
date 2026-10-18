@@ -65,6 +65,8 @@ const MINSWAP: CatalogueApp = {
       deployment: { lpPolicy: "d6aae2059baee188f74917493cf7637e679cd219bdfbbf4dcbeb1d0b", poolScript: "d6ba9b7509eac866288ff5072d2a18205ac56f744bc82dcd808cb8fe", orderScript: MINSWAP_ORDER_SCRIPT },
       poolAddress: "addr_test1zrtt4xm4p84vse3g3l6swtf2rqs943t0w39ustwdszxt3l5rajt8r8wqtygrfduwgukk73m5gcnplmztc5tl5ngy0upqhns793",
       orderAddress: "addr_test1wrdf2f2x8pq3wwk3yv936ksmt59rz94mm66yzge8zj9pk7s0kjph3",
+      // The adapter (8f353808…, preprod-applied), published by sdk/scripts/deploy-adapter.ts; its stake credential is registered.
+      adapterRef: { txHash: "282a36372ca5a66c44a22090b12f0bd6ee74a0375e5ac1a1b2c31f0271dd98bf", outputIndex: 0 },
       pools: [
         { lpName: "e5358cee5d14b83d0a4e93f321c0c3addaf8fb5010a1127b6da6a8adc0a16fd3", label: "ADA ↔ NACRE", assetA: "lovelace", assetB: "f9f812798ef9323119314c30f1ca5dd16e9eec5c116fa2c2e3a55b160014df104e41435245" },
         { lpName: "6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200", label: "ADA ↔ MIN", assetA: "lovelace", assetB: "e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed724d494e" },
