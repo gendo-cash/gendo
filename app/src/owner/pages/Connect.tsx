@@ -73,6 +73,7 @@ export function ConnectAgent({ policy }: { policy: string }) {
     </>
   );
   if (!mine) return <Shell title="Connect an agent"><div style={{ padding: 20 }} data-ready><p>Add this vault on <Link to="/vaults">All vaults</Link> first.</p></div></Shell>;
+  if (mine.version === 1) return <Shell title="Connect an agent"><div style={{ padding: 20 }} data-ready><p>This vault runs an older version. <Link to={`/v/${policy}`}>Move it to the new version</Link> first, then connect agents there.</p></div></Shell>;
 
   const origin = location.origin;
   const left = step.at === "code" ? Math.max(0, Math.floor((step.expiresAt - now) / 1000)) : 0;

@@ -21,6 +21,10 @@ describe("recipes", () => {
     expect(decodeRecipe({ op: "apps", action: "enable", name: "minswap", signers: [a] })).toBeUndefined(); // enable needs settings
     expect(decodeRecipe({ op: "apps", action: "steal", name: "minswap", signers: [a] })).toBeUndefined();
     expect(titleOf(r, {})).toBe("Enable Minswap");
+    const mv: Recipe = { op: "move", to: `gendo:preprod:${"aa".repeat(32)}#0`, signers: [a] };
+    expect(decodeRecipe(JSON.parse(JSON.stringify(encodeRecipe(mv))))).toEqual(mv);
+    expect(decodeRecipe({ op: "move", signers: [a] })).toBeUndefined();
+    expect(titleOf(mv, {})).toBe("Move to the new version");
     expect(titleOf({ op: "apps", action: "disable", name: "minswap", signers: [a] }, {})).toBe("Disable Minswap");
   });
 });

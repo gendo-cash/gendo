@@ -4,7 +4,8 @@ import { appFor } from "../../../sdk/src/core/apps/catalogue.ts";
 import { minswapAdapter } from "../../../sdk/src/core/apps/minswap/adapter.ts";
 import { useState } from "react";
 import { CML, credentialToAddress, explainTx, fromPlutusAddress, refHolderAddress, type AllowanceDatum, type Vault } from "../../../sdk/src/core/index.ts";
-import { inputsOf } from "./chain.ts";
+import { inputsOf, readLight } from "./chain.ts";
+import type { Explanation } from "../../../sdk/src/core/index.ts";
 import { detailOf, type Ctx, type Detail } from "./diff.ts";
 import { buildRecipe, type Recipe } from "./recipes.ts";
 import { needsConfirm } from "./status.ts";
@@ -29,17 +30,40 @@ export function ctxFor(o: Owner, vault: Vault, labels: Record<string, string>, r
 
 export type Prepared = { cbor: string; detail: Detail; verified: boolean };
 
-/** Explain any tx for this owner. */
-export async function explainFor(o: Owner, vault: Vault, cbor: string, labels: Record<string, string>, recipe?: Ctx["recipe"]): Promise<Prepared> {
+/** Explain any tx for this owner. `version`: the vault's code (1 is from before apps). */
+export async function explainFor(o: Owner, vault: Vault, cbor: string, labels: Record<string, string>, recipe?: Ctx["recipe"], version: 1 | 2 = 2): Promise<Prepared> {
   const { utxos, verified } = await inputsOf(o.lucid, cbor, o.net);
-  const e = explainTx(cbor, vault, utxos, { viewer: o.me.keys });
-  return { cbor, detail: detailOf(e, ctxFor(o, vault, labels, recipe)), verified };
+  const e = explainTx(cbor, vault, utxos, { viewer: o.me.keys, version });
+  const ctx = ctxFor(o, vault, labels, recipe);
+  if (version === 1) ctx.move = await moveOf(o, vault, e);
+  return { cbor, detail: detailOf(e, ctx), verified };
+}
+
+/** Where an old vault's funds go, read from the chain: never from the proposal's own words. */
+async function moveOf(o: Owner, vault: Vault, e: Explanation): Promise<NonNullable<Ctx["move"]>> {
+  const script = (a: string) => {
+    try {
+      return CML.Address.from_bech32(a).payment_cred()?.as_script()?.to_hex();
+    } catch {
+      return undefined;
+    }
+  };
+  const to = e.flows.find((f) => f.address !== vault.address && (f.delta.lovelace ?? 0n) > 0n && script(f.address))?.address;
+  const policy = to && script(to);
+  const [from, dest] = await Promise.all([readLight(vault.hash, o.net).catch(() => undefined), policy ? readLight(policy, o.net).catch(() => undefined) : undefined]);
+  return {
+    to: to ?? null,
+    name: o.vaults.find((v) => v.policy === policy)?.name ?? null,
+    fromConfig: from?.config ?? null,
+    toConfig: dest?.address === to ? (dest?.config ?? null) : null,
+    toVersion: dest?.address === to ? dest?.version : undefined,
+  };
 }
 
 /** Build a recipe and explain it, ready for review. */
-export async function prepare(o: Owner, vault: Vault, r: Recipe, labels: Record<string, string>): Promise<Prepared> {
+export async function prepare(o: Owner, vault: Vault, r: Recipe, labels: Record<string, string>, version: 1 | 2 = 2): Promise<Prepared> {
   const tx = await buildRecipe(o.lucid, vault, r, o.me.pkh);
-  return explainFor(o, vault, tx.toCBOR(), labels);
+  return explainFor(o, vault, tx.toCBOR(), labels, undefined, version);
 }
 
 /** What a tx does: the summary, warnings, rule-by-rule diff, sentences and money. */

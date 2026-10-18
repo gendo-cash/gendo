@@ -26,3 +26,4 @@ export * from "./apps/catalogue.js";
 export * as minswap from "./apps/minswap/index.js";
 export { Blockfrost, CML, Data, Lucid, SLOT_CONFIG_NETWORK, credentialToAddress, generatePrivateKey, getAddressDetails } from "@lucid-evolution/lucid";
 export type { Assets, LucidEvolution, Network, TxSignBuilder, UTxO } from "@lucid-evolution/lucid";
+export * from "./legacy.js";

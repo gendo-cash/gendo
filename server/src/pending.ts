@@ -6,7 +6,7 @@ import { appFor } from "../../sdk/src/core/apps/catalogue.js";
 import { minswapAdapter } from "../../sdk/src/core/apps/minswap/adapter.js";
 import { randomBytes } from "node:crypto";
 import type { Context, Hono } from "hono";
-import { CML, creationOf, formatVaultId, makeVault, parseVaultId, type Network } from "../../sdk/src/core/index.js";
+import { CML, creationOf, formatVaultId, makeVault, makeVaultV1, parseVaultId, type Network } from "../../sdk/src/core/index.js";
 import { describeTx } from "../../sdk/src/core/cosign.js";
 import { bodyHash, requiredSignersOf, verifiedSigners, withWitnesses } from "../../sdk/src/core/witnesses.js";
 import { sha256, type mountAuth } from "./auth.js";
@@ -46,6 +46,9 @@ function touchesVault(txCbor: string, policy: string): boolean {
     if (body.outputs().get(i).address().payment_cred()?.as_script()?.to_hex() === policy) return true;
   const mp = body.mint()?.keys();
   for (let i = 0; mp && i < mp.len(); i++) if (mp.get(i).to_hex() === policy) return true;
+  // A move out of an old vault pays nothing back to it and may burn nothing: it carries the vault's script.
+  const scripts = CML.Transaction.from_cbor_hex(txCbor).witness_set().plutus_v3_scripts();
+  for (let i = 0; scripts && i < scripts.len(); i++) if (scripts.get(i).hash().to_hex() === policy) return true;
   return false;
 }
 
@@ -291,7 +294,14 @@ export function mountPending(app: Hono, d: Deps, auth: Auth) {
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400);
     }
-    const owners = await d.owners(policy);
+    let owners = await d.owners(policy);
+    // A vault from before apps: the same id derives it with the old code (its owners can still move it).
+    if (!owners) {
+      const id = parseVaultId(vaultId as string);
+      const old = makeVaultV1(id.network, id.seed).hash;
+      const oldOwners = await d.owners(old);
+      if (oldOwners) [policy, owners] = [old, oldOwners];
+    }
     if (!owners) return c.json({ error: "no vault with that id on chain" }, 404);
     if (!owners.includes(who)) return c.json({ error: "you aren't an owner of that vault" }, 403);
     d.store.addUserVault(who, policy, vaultId.trim());

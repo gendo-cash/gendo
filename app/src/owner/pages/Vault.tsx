@@ -4,7 +4,7 @@ import { allowanceHistory } from "../../../../sdk/src/read/index.ts";
 import { ada, allowanceSentence, cleanPurpose, paymentLine, tokenName } from "../../public/format.ts";
 import { navigate } from "../../route.ts";
 import { api } from "../api.ts";
-import { chainGet, readLight, vaultFromId } from "../chain.ts";
+import { chainGet, readLight, vaultOf } from "../chain.ts";
 import { decodeRecipe, encodeRecipe, titleOf, type Recipe } from "../recipes.ts";
 import { prepare, useReview } from "../review.tsx";
 import { toLovelace } from "../validate.ts";
@@ -12,6 +12,7 @@ import { Copy, ErrorNote, Link, Shell, Signers, defaultSigners, short, useLoad, 
 import { Avatar, Chain, Spinner } from "../../ui/Brand.tsx";
 import { inFlight } from "../status.ts";
 import { AppsTab } from "./Apps.tsx";
+import { OldVaultPage } from "./OldVault.tsx";
 import { partialSign } from "../wallet.ts";
 
 export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "activity" | "treasury" | "apps" | "settings" }) {
@@ -35,6 +36,7 @@ export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "ac
   usePoll(data.refresh, waiting);
   if (!mine)
     return <Shell title="Vault"><div style={{ padding: 20 }} data-ready><p>Add this vault on <Link to="/vaults">All vaults</Link> first (you need its vault id).</p></div></Shell>;
+  if (mine.version === 1) return <OldVaultPage mine={mine} />;
   const view = data.data?.view;
   const cfg = view?.config;
   const threshold = Number(cfg?.threshold ?? 1n);
@@ -43,7 +45,7 @@ export function VaultPage({ policy, tab }: { policy: string; tab: "agents" | "ac
     setErr(undefined);
     setNote(undefined);
     try {
-      const prepared = await prepare(o, vaultFromId(mine.vaultId), r, data.data?.labels ?? {});
+      const prepared = await prepare(o, vaultOf(mine), r, data.data?.labels ?? {}, mine.version);
       setBusy(undefined);
       if (!(await review.ask(prepared))) return;
       setBusy("Waiting for your wallet…");

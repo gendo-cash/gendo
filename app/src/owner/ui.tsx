@@ -4,10 +4,10 @@ import { navigate } from "../route.ts";
 import { Avatar, Mark, Netband } from "../ui/Brand.tsx";
 import type { MyVault } from "./api.ts";
 import type { Net } from "./types.ts";
-import { sidebarVaults } from "./vaults.ts";
+import { sidebarVaults, type SavedVault } from "./vaults.ts";
 import { wallets, type Connected } from "./wallet.ts";
 
-export type Owner = { net: Net; lucid: LucidEvolution; me: Connected; vaults: MyVault[]; reloadVaults(): Promise<void>; needYou: Record<string, number>; inboxCount: number; reloadInbox(): Promise<void>; signOut(): void };
+export type Owner = { net: Net; lucid: LucidEvolution; me: Connected; vaults: SavedVault[]; reloadVaults(): Promise<void>; needYou: Record<string, number>; inboxCount: number; reloadInbox(): Promise<void>; signOut(): void; /** A notice every page shows under its title. */ banner?: ReactNode };
 export const OwnerCtx = createContext<Owner | null>(null);
 export const useOwner = () => useContext(OwnerCtx)!;
 
@@ -154,8 +154,8 @@ export function Shell({ policy, tab, title, actions, children }: { policy?: stri
           <div className="sidecap cap">Vaults</div>
           {shown.map((v) => (
             <div key={v.policy} className={v.policy === policy ? "vcard cur" : "vcard"}>
-              {nav(`/v/${v.policy}`, <><Avatar id={v.policy} kind="vault" size={24} /><span className="vname">{v.name ?? "Unnamed vault"}</span></>, false, count(o.needYou[v.policy]), "nav vhead")}
-              {v.policy === policy && (
+              {nav(`/v/${v.policy}`, <><Avatar id={v.policy} kind="vault" size={24} /><span className="vname">{v.name ?? "Unnamed vault"}{v.version === 1 && <span className="vold">older version</span>}</span></>, false, count(o.needYou[v.policy]), "nav vhead")}
+              {v.policy === policy && v.version === 2 && (
                 <div className="subnav">
                   {(["agents", "activity", "treasury", "apps", "settings"] as const).map((t) => nav(`/v/${policy}/${t}`, <><Icon name={TAB_ICON[t]} />{t[0]!.toUpperCase() + t.slice(1)}</>, tab === t))}
                   <a className="nav" href={`/w/${policy}`}><Icon name="public" />Public page</a>
@@ -190,6 +190,7 @@ export function Shell({ policy, tab, title, actions, children }: { policy?: stri
         </nav>
         <div className="content">
           <div className="top"><div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>{title}</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{actions}</div></div>
+          {o.banner}
           {children}
         </div>
       </div>

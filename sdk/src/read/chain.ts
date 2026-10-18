@@ -6,7 +6,7 @@ import type { ConfigDatum } from "../core/data.js";
 import type { Intent } from "../core/intent.js";
 import { utf8ToHex } from "../core/bytes.js";
 import { floorDiv, unitOf, wellFormedProblems } from "../core/limits.js";
-import { addressToBech32, allowanceFromCbor, configFromCbor, orderFromCbor, scriptAddress, type ReadNetwork } from "./decode.js";
+import { addressToBech32, allowanceFromCbor, orderFromCbor, scriptAddress, versionedConfigFromCbor, type ReadNetwork } from "./decode.js";
 import { isOrderAddress, poolByLp } from "../core/apps/catalogue.js";
 import { orderStatus } from "../core/apps/minswap/status.js";
 import { decodePlutusData } from "./plutus-cbor.js";
@@ -33,6 +33,8 @@ export type VaultView = {
   policy: string;
   address: string;
   config: ConfigDatum | null;
+  /** The vault's code: 2 is current; 1 is from before apps (it can only move its funds to a current vault). */
+  version: 1 | 2;
   treasuryLovelace: bigint;
   /** Everything the treasury holds, per unit (`lovelace` included): swap proceeds land here. */
   treasury: Record<string, bigint>;
@@ -87,12 +89,12 @@ async function utxosAt(get: Get, address: string): Promise<BfUtxo[]> {
 
 const MAX_DATE_MS = 8_640_000_000_000_000n; // the largest time a JS Date can show
 
-function allowanceView(u: BfUtxo, unit: string, network: ReadNetwork, now: bigint): AllowanceView {
+function allowanceView(u: BfUtxo, unit: string, network: ReadNetwork, now: bigint, version: 1 | 2 = 2): AllowanceView {
   const base = { unit, txHash: u.tx_hash, outputIndex: u.output_index, lovelace: qty(u.amount, "lovelace"), caps: [], payees: [] };
   let d;
   try {
     if (!u.inline_datum) throw new Error("no inline datum");
-    d = allowanceFromCbor(u.inline_datum);
+    d = allowanceFromCbor(u.inline_datum, version);
   } catch {
     return { ...base, status: "malformed" };
   }
@@ -128,28 +130,28 @@ export async function readVault(get: Get, policy: string, network: ReadNetwork, 
   const configUnit = policy + utf8ToHex("config");
   const now = BigInt(nowMs);
   let config: ConfigDatum | null = null;
-  let hasConfig = false;
+  let version: 1 | 2 = 2;
+  const cfgUtxo = utxos.find((u) => u.amount.some((a) => a.unit === configUnit));
+  if (!cfgUtxo) return undefined;
+  try {
+    ({ config, version } = versionedConfigFromCbor(cfgUtxo.inline_datum ?? ""));
+  } catch {
+    config = null;
+  }
   let treasuryLovelace = 0n;
   const treasury: Record<string, bigint> = {};
   const allowances: AllowanceView[] = [];
   for (const u of utxos) {
     const vaultUnits = u.amount.filter((a) => a.unit.startsWith(policy) && a.unit !== "lovelace");
-    if (vaultUnits.some((a) => a.unit === configUnit)) {
-      hasConfig = true;
-      try {
-        config = configFromCbor(u.inline_datum ?? "");
-      } catch {
-        config = null;
-      }
-    } else if (vaultUnits.length === 1 && vaultUnits[0]!.quantity === "1") allowances.push(allowanceView(u, vaultUnits[0]!.unit, network, now));
+    if (vaultUnits.some((a) => a.unit === configUnit)) continue;
+    else if (vaultUnits.length === 1 && vaultUnits[0]!.quantity === "1") allowances.push(allowanceView(u, vaultUnits[0]!.unit, network, now, version));
     else if (vaultUnits.length === 0) {
       treasuryLovelace += qty(u.amount, "lovelace");
       for (const a of u.amount) treasury[a.unit] = (treasury[a.unit] ?? 0n) + BigInt(a.quantity);
     }
   }
-  if (!hasConfig) return undefined;
   if (config?.paused) for (const a of allowances) if (a.status === "active") a.status = "paused";
-  return { policy, address, config, treasuryLovelace, treasury, allowances };
+  return { policy, address, config, version, treasuryLovelace, treasury, allowances };
 }
 
 // Blockfrost flags reference and collateral inputs, and the collateral-return output: none of

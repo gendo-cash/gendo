@@ -1,7 +1,7 @@
 // Owner side. Every function returns an UNSIGNED tx; owners sign offline and
 // the witnesses are assembled with cosign.ts. The proposer's wallet (selected
 // on `lucid`) pays fees and provides collateral; vault value never pays them.
-import { credentialToAddress, type Assets, type LucidEvolution, type TxSignBuilder, type UTxO } from "@lucid-evolution/lucid";
+import { Constr, Data, credentialToAddress, type Assets, type LucidEvolution, type TxSignBuilder, type UTxO } from "@lucid-evolution/lucid";
 import { add, sub, withMinAda } from "./assets.js";
 import type { AllowanceUtxo, ConfigUtxo } from "./chain.js";
 import {
@@ -278,6 +278,50 @@ export async function revokeAllowance(
       ownerSigners,
     ),
   );
+}
+
+/**
+ * Move everything a version-1 vault (from before apps) holds into a current vault with the same owners
+ * and threshold: its treasury and every agent budget (each allowance token is burned). Signed by the old
+ * vault's owners at its threshold. Only the old config stays behind (its token can't leave or be burned),
+ * with the ADA it holds. Never decodes the old datums.
+ */
+export async function moveToCurrentVault(
+  lucid: LucidEvolution,
+  from: Vault,
+  to: Vault,
+  toConfig: ConfigDatum,
+  ownerSigners: string[],
+): Promise<TxSignBuilder> {
+  if (from.hash === to.hash) throw new Error("that's the same vault");
+  const utxos = await lucid.utxosAt(from.address);
+  const config = utxos.find((u) => (u.assets[from.configUnit] ?? 0n) > 0n);
+  if (!config?.datum) throw new Error("the old vault's config isn't on chain");
+  const old = legacyConfigOf(config.datum);
+  const sameOwners = [...old.owners].sort().join() === [...toConfig.owners].sort().join();
+  if (!sameOwners || old.threshold !== toConfig.threshold) throw new Error("the new vault must have the same owners and threshold");
+  const moving = utxos.filter((u) => u !== config);
+  if (!moving.length) throw new Error("nothing left to move");
+  const total = add(...moving.map((u) => u.assets));
+  const tokens = Object.keys(total).filter((u) => u.startsWith(from.hash));
+  if (tokens.some((u) => u === from.configUnit || total[u] !== 1n)) throw new Error("the old vault holds an unexpected vault token");
+  const burn = Object.fromEntries(tokens.map((u) => [u, -1n]));
+  let b = lucid
+    .newTx()
+    .collectFrom(moving, OWNER)
+    .readFrom([config])
+    .pay.ToAddress(to.address, sub(total, Object.fromEntries(tokens.map((u) => [u, 1n]))));
+  if (tokens.length) b = b.mintAssets(burn, mintRedeemer("ManageAllowances"));
+  // Inline, never by reference: the app's server files a proposal under the vault whose script it carries.
+  b = b.attach.SpendingValidator(from.script);
+  return finish(lucid, signers(b, ownerSigners));
+}
+
+/** A version-1 config: owners, threshold, paused, max validity (no apps). */
+function legacyConfigOf(cbor: string): { owners: string[]; threshold: bigint } {
+  const c = Data.from(cbor) as Constr<Data>;
+  if (!(c instanceof Constr) || c.index !== 0 || c.fields.length !== 4) throw new Error("not a version-1 vault config");
+  return { owners: c.fields[0] as string[], threshold: c.fields[1] as bigint };
 }
 
 export type { AllowanceUtxo };

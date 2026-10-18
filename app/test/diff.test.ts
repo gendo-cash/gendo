@@ -132,3 +132,27 @@ describe("review screens show everything in full", () => {
     expect(other.money).toContainEqual({ label: "To addr_test1wsomeotherscript", value: "5 ADA" });
   });
 });
+
+describe("detailOf: moving a vault from before apps", () => {
+  const cfg = { owners: [h(1), h(2)], threshold: 2n, paused: false, maxTxValidityMs: 600_000n, apps: [] };
+  const e = {
+    ...base,
+    changes: [{ kind: "revoke", unit: h(5) + "01", before: null, lovelace: 20_000_000n }],
+    leavesVault: { lovelace: 120_000_000n },
+    flows: [{ address: "addr_test1wvault", delta: { lovelace: -120_000_000n } }, { address: "addr_test1wnew", delta: { lovelace: 120_000_000n } }],
+  } as Explanation;
+  const move = { to: "addr_test1wnew", name: "Team v2", fromConfig: cfg, toConfig: cfg, toVersion: 2 as const };
+  it("says where everything goes and that the agent budgets close", () => {
+    const d = detailOf(e, { ...ctx, move });
+    expect(d.title).toBe("Move to the new version");
+    expect(d.summary).toMatch(/into Team v2/);
+    expect(d.rows).toContainEqual({ k: "Destination is", now: "—", next: "a current gendo vault (Team v2)", changed: true });
+    expect(d.rows).toContainEqual({ k: "payout-bot", now: "20 ADA budget", next: "closed; the funds move", changed: true });
+    expect(d.warnings).toEqual([]);
+  });
+  it("warns when the destination isn't a current vault, or its owners differ", () => {
+    expect(detailOf(e, { ...ctx, move: { ...move, toVersion: undefined, toConfig: null } }).warnings.join()).toMatch(/isn't a current gendo vault/);
+    expect(detailOf(e, { ...ctx, move: { ...move, toConfig: { ...cfg, owners: [h(1), h(3)] } } }).warnings.join()).toMatch(/owners or threshold/);
+    expect(detailOf(e, { ...ctx, move: { ...move, toConfig: { ...cfg, threshold: 1n } } }).warnings.join()).toMatch(/owners or threshold/);
+  });
+});

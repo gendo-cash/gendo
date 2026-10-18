@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fromPlutusAddress, readAllowance, readConfig, toPlutusAddress, type AllowanceDatum } from "../../../../sdk/src/core/index.ts";
 import { api } from "../api.ts";
-import { vaultFromId } from "../chain.ts";
+import { vaultOf } from "../chain.ts";
 import { sentence } from "../diff.ts";
 import { encodeRecipe, grantedUnit, titleOf, type Recipe } from "../recipes.ts";
 import { prepare, useReview } from "../review.tsx";
@@ -15,7 +15,7 @@ const periodOf = (ms: bigint): AgentForm["period"] => (ms === PERIOD_MS.week ? "
 export function AgentEditor({ policy, unit }: { policy: string; unit?: string }) {
   const o = useOwner();
   const mine = o.vaults.find((v) => v.policy === policy);
-  const vault = useMemo(() => (mine ? vaultFromId(mine.vaultId) : undefined), [mine?.vaultId]);
+  const vault = useMemo(() => (mine ? vaultOf(mine) : undefined), [mine?.vaultId]);
   const review = useReview(o.net);
   const [periodTouched, setPeriodTouched] = useState(false);
   const loaded = useLoad(async () => {
@@ -128,6 +128,7 @@ export function AgentEditor({ policy, unit }: { policy: string; unit?: string })
   const field = (id: string, label: string, input: React.ReactNode, hint?: string) => (
     <div className="field"><label htmlFor={id}>{label}</label><div>{input}</div>{hint && <span className="hint">{hint}</span>}</div>
   );
+  if (mine.version === 1) return <Shell title="Agent"><div style={{ padding: 20 }} data-ready><p>This vault runs an older version and can't be changed here. <Link to={`/v/${policy}`}>Move it to the new version</Link> first.</p></div></Shell>;
   const name = unit ? (d?.labels[unit] ?? `agent ${short(unit.slice(56))}`) : "New agent";
   const vaultId = mine.vaultId;
   return (

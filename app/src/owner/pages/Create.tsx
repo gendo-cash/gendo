@@ -1,11 +1,12 @@
 // Create a vault: who owns it, how many must agree, how long an agent payment may take,
 // and an optional first deposit. Built and explained in the browser; the wallet signs once;
 // the server submits it and registers it when it lands.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Spinner } from "../../ui/Brand.tsx";
 import { navigate } from "../../route.ts";
 import { owner } from "../../../../sdk/src/core/index.ts";
 import { api } from "../api.ts";
+import { readLight } from "../chain.ts";
 import { explainFor, useReview } from "../review.tsx";
 import { Copy, ErrorNote, Shell, short, useOwner, usePoll } from "../ui.tsx";
 import { buildError, createConfig, createOptions, createProblems, ownerHint, type CreateForm } from "../validate.ts";
@@ -24,6 +25,17 @@ export function Create() {
   const problems = createProblems(f, { me: o.me.pkh, net: o.net });
   const n = 1 + f.owners.length;
   const hint = ownerHint(next, f.owners, o.me.pkh, o.net);
+  // Moving a vault from before apps: start from its owners, threshold and name; come back to it once this lands.
+  const from = o.vaults.find((v) => v.version === 1 && v.policy === new URLSearchParams(location.search).get("from"));
+  useEffect(() => {
+    if (!from) return;
+    void readLight(from.policy, o.net).then((view) => {
+      const c = view?.config;
+      if (!c) return;
+      const min = String(Number(c.maxTxValidityMs) / 60_000);
+      setF((f) => ({ ...f, name: from.name ?? "My vault", owners: c.owners.filter((k) => k !== o.me.pkh), threshold: String(c.threshold), windowMin: (["2", "10", "60"].includes(min) ? min : f.windowMin) as CreateForm["windowMin"] }));
+    });
+  }, [from?.policy]);
 
   const addOwner = () => {
     // A second owner: default to 2 of n, the usual company card.
@@ -62,7 +74,7 @@ export function Create() {
     if (!row) return;
     if (row.status === "landed") {
       await o.reloadVaults();
-      navigate(`/v/${made.policy}/agents`);
+      navigate(from ? `/v/${from.policy}` : `/v/${made.policy}/agents`);
     } else if (row.status !== made.status) setMade({ ...made, status: row.status, ...(row.error ? { error: row.error } : {}) });
   }, !!made && made.status !== "failed");
 
@@ -89,6 +101,7 @@ export function Create() {
     <Shell title={title}>
       {review.panel}
       <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 760 }} data-ready>
+        {from && <div className="note">The new version of {from.name ?? "your vault"}: same owners and threshold, filled in. Once it lands, you go back to move its funds.</div>}
         <section className="panel">
           <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             <label className="cap" htmlFor="cname">Name</label>

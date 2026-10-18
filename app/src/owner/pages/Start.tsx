@@ -97,7 +97,7 @@ export function Start() {
                 {(rows.data ?? o.vaults.map((v) => ({ v, view: undefined }))).map(({ v, view }) => (
                   <tr key={v.policy}>
                     <td className="lead"><Link to={`/v/${v.policy}`}><b>{v.name ?? "Unnamed vault"}</b></Link><div className="mono faint" style={{ fontSize: 12 }}>{short(v.vaultId)}</div></td>
-                    <td data-label="Status"><span className={view?.config?.paused ? "pill fill" : "pill"}>{view?.config ? (view.config.paused ? "Paused" : "Active") : "—"}</span></td>
+                    <td data-label="Status"><span className={view?.config?.paused ? "pill fill" : "pill"}>{v.version === 1 ? "Older version" : view?.config ? (view.config.paused ? "Paused" : "Active") : "—"}</span></td>
                     <td data-label="Owners" className="mono">{view?.config ? `${view.config.threshold} of ${view.config.owners.length}` : "—"}</td>
                     <td data-label="Treasury" className="num">{view ? `${ada(view.treasuryLovelace)} ADA` : "—"}</td>
                     <td data-label="Agents" className="num">{view ? view.allowances.length : "—"}</td>

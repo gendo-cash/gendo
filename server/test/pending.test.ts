@@ -233,3 +233,23 @@ describe("agent tokens and names", () => {
     expect((await (await app.request(`/public/${policy}`)).json()).agents).toEqual({ [unitX]: "payout-bot" });
   });
 });
+
+describe("vaults from before apps", () => {
+  it("an owner can add one by its id: the same id derives it with the old code", async () => {
+    const { makeVaultV1 } = await import("../../sdk/src/core/legacy.js");
+    const { parseVaultId } = await import("../../sdk/src/core/vault.js");
+    const w = await world();
+    const old = makeVaultV1(parseVaultId(vaultId).network, parseVaultId(vaultId).seed).hash;
+    const app = createApp({
+      store: store(),
+      upstream: async () => new Response("{}", { status: 404 }),
+      owners: async (p: string) => (p === old ? [w.A.pkh] : undefined),
+      allowanceOf: async () => undefined,
+      submit: async () => ({ ok: true, hash: "h" }),
+    } as never);
+    const h = json({ authorization: `Bearer ${(await (await signIn(app, w.A)).json()).token}` });
+    const r = await app.request("/me/vaults", { method: "POST", headers: h, body: JSON.stringify({ vaultId }) });
+    expect(await r.json()).toEqual({ policy: old, vaultId });
+    expect(await (await app.request("/me/vaults", { headers: h })).json()).toEqual([{ policy: old, vaultId, name: null, listed: false }]);
+  });
+});

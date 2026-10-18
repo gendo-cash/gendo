@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Chain, Spinner } from "../../ui/Brand.tsx";
 import { api } from "../api.ts";
-import { livenessOf, vaultFromId } from "../chain.ts";
+import { livenessOf, vaultOf } from "../chain.ts";
 import { decodeRecipe, encodeRecipe, recipeMatches, titleOf } from "../recipes.ts";
 import { DetailView, explainFor, prepare, useReview, type Prepared } from "../review.tsx";
 import { inFlight, needsConfirm, statusOf, type Status } from "../status.ts";
@@ -32,9 +32,9 @@ export function Inbox() {
         labels[p.policy] ??= (await api.listing(p.policy).catch(() => undefined))?.agents ?? {};
         try {
           if (!v) throw new Error("add this vault on the start page to check this item");
-          const vault = vaultFromId(v.vaultId);
+          const vault = vaultOf(v);
           const recipe = p.kind === "request" ? (p.recipe as { intentId?: string; purpose?: string; reason?: string } | null) : null;
-          const [view, live] = await Promise.all([explainFor(o, vault, p.cbor, labels[p.policy]!, recipe), p.status === "open" ? livenessOf(o.lucid, p.cbor) : Promise.resolve(undefined)]);
+          const [view, live] = await Promise.all([explainFor(o, vault, p.cbor, labels[p.policy]!, recipe, v.version), p.status === "open" ? livenessOf(o.lucid, p.cbor) : Promise.resolve(undefined)]);
           return { p, status: statusOf(p, live, o.me.pkh, Date.now()), view, vaultName, labels: labels[p.policy]! };
         } catch (x) {
           return { p, status: statusOf(p, undefined, o.me.pkh, Date.now()), error: (x as Error).message, vaultName, labels: labels[p.policy]! };
@@ -73,10 +73,10 @@ export function Inbox() {
     setBusy("Building it again from the current chain…");
     setErr(undefined);
     try {
-      const vault = vaultFromId(v.vaultId);
+      const vault = vaultOf(v);
       const { utxos } = await inputsOf(o.lucid, it.p.cbor, o.net);
-      if (!recipeMatches(r, explainTx(it.p.cbor, vault, utxos))) throw new Error("Its recipe doesn't match what the original proposal did; build it again from the vault page instead.");
-      const p = await prepare(o, vault, r, it.labels);
+      if (!recipeMatches(r, explainTx(it.p.cbor, vault, utxos, { version: v.version }))) throw new Error("Its recipe doesn't match what the original proposal did; build it again from the vault page instead.");
+      const p = await prepare(o, vault, r, it.labels, v.version);
       setBusy(undefined);
       if (!(await review.ask(p))) return;
       setBusy("Waiting for your wallet…");

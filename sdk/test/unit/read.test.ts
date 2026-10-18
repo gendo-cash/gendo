@@ -324,3 +324,21 @@ describe("light encoder", () => {
     for (const hex of samples) expect(Data.from(encodePlutusData(decodePlutusData(hex)))).toEqual(Data.from(hex));
   });
 });
+
+describe("version-1 vaults (before apps)", () => {
+  it("a four-field config reads as version 1, with no apps; the strict reader refuses it", async () => {
+    const { Constr, Data } = await import("@lucid-evolution/lucid");
+    const { configFromCbor, versionedConfigFromCbor } = await import("../../src/read/decode.js");
+    const v1 = Data.to(new Constr(0, [["aa".repeat(28)], 1n, new Constr(1, []), 3_600_000n]));
+    expect(versionedConfigFromCbor(v1)).toEqual({ version: 1, config: { owners: ["aa".repeat(28)], threshold: 1n, paused: true, maxTxValidityMs: 3_600_000n, apps: [] } });
+    expect(() => configFromCbor(v1)).toThrow();
+    expect(() => versionedConfigFromCbor(v1, 2)).toThrow();
+  });
+  it("an eight-field allowance reads only as version 1", async () => {
+    const { Constr, Data } = await import("@lucid-evolution/lucid");
+    const { allowanceFromCbor } = await import("../../src/read/decode.js");
+    const v1 = Data.to(new Constr(0, ["bb".repeat(28), [], [new Constr(0, ["", "", 5n, 2n])], [0n], 0n, 86_400_000n, 10n ** 13n, 1_000_000n]));
+    expect(allowanceFromCbor(v1, 1).apps).toEqual([]);
+    expect(() => allowanceFromCbor(v1)).toThrow();
+  });
+});

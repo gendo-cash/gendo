@@ -25,6 +25,8 @@ export type Ctx = {
   recipe?: { intentId?: string; purpose?: string; reason?: string } | null;
   /** The catalogue's adapter and order script per app on this network: anything else gets a warning. */
   appScripts?: Record<string, { adapter: string; orderScript: string }>;
+  /** A vault from before apps moving its funds: where they go, read from the chain. */
+  move?: { to: string | null; name: string | null; fromConfig: ConfigDatum | null; toConfig: ConfigDatum | null; toVersion?: 1 | 2 };
 };
 
 const lov = (d: AllowanceDatum) => d.caps.find((c) => c.policy === "" && c.name === "");
@@ -148,6 +150,29 @@ export function detailOf(e: Explanation, ctx: Ctx): Detail {
   );
   const out = (d: Omit<Detail, "money" | "warnings">): Detail => ({ ...d, money, warnings: [...e.warnings, ...appWarnings] });
 
+  if (ctx.move && Object.keys(e.leavesVault).length) {
+    const m = ctx.move;
+    const closed = e.changes.filter((c) => c.kind === "revoke");
+    const sameOwners = !!m.fromConfig && !!m.toConfig && [...m.fromConfig.owners].sort().join() === [...m.toConfig.owners].sort().join();
+    const sameThreshold = !!m.fromConfig && !!m.toConfig && m.fromConfig.threshold === m.toConfig.threshold;
+    const warnings: string[] = [];
+    if (!m.to || m.toVersion !== 2 || !m.toConfig) warnings.push("the funds go to an address that isn't a current gendo vault");
+    else if (!sameOwners || !sameThreshold) warnings.push("the new vault's owners or threshold aren't this vault's");
+    if (e.flows.some((f) => !isVault(f.address) && f.address !== m.to && !ctx.isMine(f.address) && (f.delta.lovelace ?? 0n) > 0n)) warnings.push("part of it goes somewhere other than the new vault");
+    const t = (c: ConfigDatum | null) => (c ? `${c.threshold} of ${c.owners.length}` : "unknown");
+    const rows: Row[] = [
+      { k: "Destination", now: "—", next: m.to ?? "none", changed: true },
+      { k: "Destination is", now: "—", next: m.toVersion === 2 && m.toConfig ? `a current gendo vault${m.name ? ` (${m.name})` : ""}` : "not a current gendo vault", changed: true },
+      { k: "Owners", now: m.fromConfig ? `${m.fromConfig.owners.length} owner${m.fromConfig.owners.length === 1 ? "" : "s"}` : "unknown", next: sameOwners ? "the same owners" : "different owners", changed: !sameOwners },
+      { k: "Threshold", now: t(m.fromConfig), next: t(m.toConfig), changed: !sameThreshold },
+      ...closed.map((c) => ({ k: name((c as { unit: string }).unit), now: `${ada((c as { lovelace: bigint }).lovelace)} ADA budget`, next: "closed; the funds move", changed: true })),
+    ];
+    return { ...out({
+      kind: "Change", title: "Move to the new version",
+      summary: `Moves everything this vault holds (${qty(e.leavesVault)}) into ${m.name ?? "the new vault"}, which runs the current version of gendo.${closed.length ? ` ${closed.length} agent budget${closed.length === 1 ? " closes" : "s close"} here; connect ${closed.length === 1 ? "that agent" : "those agents"} again on the new vault.` : ""} This vault keeps only its settings deposit.`,
+      rows,
+    }), warnings: [...e.warnings, ...warnings] };
+  }
   const spend = e.changes.find((c) => c.kind === "spend");
   if (spend && spend.kind === "spend") {
     const cap = spend.before && lov(spend.before);

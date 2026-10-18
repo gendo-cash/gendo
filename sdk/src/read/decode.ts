@@ -10,19 +10,32 @@ import { hexToUtf8 } from "../core/bytes.js";
 export type ReadNetwork = "Preprod" | "Preview" | "Custom";
 
 export function configFromCbor(hex: string): ConfigDatum {
-  const [owners, threshold, paused, maxTx, apps] = asConstr(decodePlutusData(hex), 0, 5);
+  return versionedConfigFromCbor(hex, 2).config;
+}
+
+/**
+ * A config of either vault version: 2 (current, with apps) or 1 (before apps: four fields). The chain
+ * validates every config it accepts, so the shape tells the version: a current vault never holds a
+ * four-field config. `only` refuses the other version.
+ */
+export function versionedConfigFromCbor(hex: string, only?: 1 | 2): { config: ConfigDatum; version: 1 | 2 } {
+  const d = decodePlutusData(hex);
+  const version = d.k === "constr" && d.fields.length === 4 ? 1 : 2;
+  if (only && version !== only) throw new Error(`expected a version ${only} config`);
+  const [owners, threshold, paused, maxTx, apps] = asConstr(d, 0, version === 1 ? 4 : 5);
   const p = paused!;
   if (p.k !== "constr" || p.fields.length !== 0 || p.index > 1) throw new Error("bad Bool");
-  return {
+  const config = {
     owners: asList(owners!).map(asBytes),
     threshold: asInt(threshold!),
     paused: p.index === 1,
     maxTxValidityMs: asInt(maxTx!),
-    apps: asList(apps!).map((a) => {
+    apps: apps === undefined ? [] : asList(apps).map((a) => {
       const [name, adapter, orderScript, settings] = asConstr(a, 0, 4);
       return { name: hexToUtf8(asBytes(name!)), adapter: asBytes(adapter!), orderScript: asBytes(orderScript!), settings: encodePlutusData(settings!) };
     }),
   };
+  return { config, version };
 }
 
 const credential = (d: PData): Credential => {
@@ -44,8 +57,9 @@ function address(d: PData): PlutusAddress {
   return { payment: credential(pay!), stake: { pointer: [asInt(a!), asInt(b!), asInt(c!)] } };
 }
 
-export function allowanceFromCbor(hex: string): AllowanceDatum {
-  const [agent, dests, caps, spent, ws, period, exp, maxFee, apps] = asConstr(decodePlutusData(hex), 0, 9);
+/** An allowance of a vault of `version` (1: before apps, eight fields; no apps). */
+export function allowanceFromCbor(hex: string, version: 1 | 2 = 2): AllowanceDatum {
+  const [agent, dests, caps, spent, ws, period, exp, maxFee, apps] = asConstr(decodePlutusData(hex), 0, version === 1 ? 8 : 9);
   return {
     agent: asBytes(agent!),
     destinations: asList(dests!).map(address),
@@ -58,7 +72,7 @@ export function allowanceFromCbor(hex: string): AllowanceDatum {
     periodMs: asInt(period!),
     expiresAt: asInt(exp!),
     maxFee: asInt(maxFee!),
-    apps: asList(apps!).map((n) => hexToUtf8(asBytes(n))),
+    apps: apps === undefined ? [] : asList(apps).map((n) => hexToUtf8(asBytes(n))),
   };
 }
 

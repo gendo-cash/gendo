@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import type { LucidEvolution } from "../../../sdk/src/core/index.ts";
 import type { Route } from "../route.ts";
 import { Netband, Spinner } from "../ui/Brand.tsx";
-import { SERVER_DOWN, api, session, type MyVault } from "./api.ts";
-import { openChain, readThroughSession } from "./chain.ts";
-import { consistentVaults, staleCount } from "./vaults.ts";
+import { SERVER_DOWN, api, session } from "./api.ts";
+import { openChain, readLight, readThroughSession } from "./chain.ts";
+import { knownVaults, type SavedVault } from "./vaults.ts";
 import { AgentEditor } from "./pages/AgentEditor.tsx";
 import { ConnectAgent } from "./pages/Connect.tsx";
 import { Create } from "./pages/Create.tsx";
@@ -19,12 +19,10 @@ export default function OwnerApp({ route, network }: { route: Route; network: Ne
   const [lucid, setLucid] = useState<LucidEvolution>();
   const [fatal, setFatal] = useState<string>();
   const [me, setMe] = useState<Connected>();
-  const [vaults, setVaults] = useState<MyVault[]>([]);
+  const [vaults, setVaults] = useState<SavedVault[]>([]);
   const [needYou, setNeedYou] = useState<Record<string, number>>({});
   const [down, setDown] = useState(false);
-  // Vaults saved before an update that changed the vault's code: their ids no longer derive their address.
-  const [stale, setStale] = useState(0);
-  const RESET_KEY = "gendo.reset.apps-v1";
+  const RESET_KEY = "gendo.old-version.v1";
   const [resetSeen, setResetSeen] = useState(() => {
     try {
       return localStorage.getItem(RESET_KEY) === "1";
@@ -67,9 +65,15 @@ export default function OwnerApp({ route, network }: { route: Route; network: Ne
 
   const reloadVaults = useCallback(async () => {
     try {
-      const list = await api.myVaults();
-      setVaults(consistentVaults(list));
-      setStale(staleCount(list));
+      const list = knownVaults(await api.myVaults());
+      // A vault from before apps that has been moved holds only its settings deposit: nothing left to show.
+      const moved = new Set(
+        (await Promise.all(list.filter((v) => v.version === 1).map(async (v) => {
+          const view = await readLight(v.policy, network).catch(() => undefined);
+          return view && view.treasuryLovelace === 0n && !view.allowances.length ? [v.policy] : [];
+        }))).flat(),
+      );
+      setVaults(list.filter((v) => !moved.has(v.policy)));
       setDown(false);
     } catch (e) {
       if ((e as Error).message === SERVER_DOWN) setDown(true);
@@ -98,6 +102,12 @@ export default function OwnerApp({ route, network }: { route: Route; network: Ne
   if (!me) return <Connect onConnected={setMe} />;
   const ctx: Owner = {
     net: network, lucid, me, vaults, reloadVaults, needYou, inboxCount: Object.values(needYou).reduce((a, b) => a + b, 0), reloadInbox,
+    banner: vaults.some((v) => v.version === 1) && !resetSeen && (
+        <div className="note" role="status" style={{ margin: "16px 20px 0", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+          <span>gendo was updated. Vaults marked "older version" still work for their agents, but can't use apps or be changed. Open one to move it to the new version.</span>
+          <button type="button" className="btn" onClick={() => { try { localStorage.setItem(RESET_KEY, "1"); } catch { /* shown again next time */ } setResetSeen(true); }}>Got it</button>
+        </div>
+      ),
     signOut: () => {
       session.clear();
       setMe(undefined);
@@ -109,12 +119,6 @@ export default function OwnerApp({ route, network }: { route: Route; network: Ne
         <div className="err" role="alert" style={{ background: "#15120f", border: "1px dashed #4a2a24" }}>
           <span style={{ fontWeight: 700 }}>{SERVER_DOWN}</span>
           <button type="button" className="btn" onClick={() => void reloadVaults()}>Retry</button>
-        </div>
-      )}
-      {stale > 0 && !resetSeen && (
-        <div className="note" role="status" style={{ margin: "12px 20px 0", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-          <span>gendo was updated, and vaults created before the update aren't shown ({stale}). Their funds are safe on chain; <a href="https://github.com/gendo-cash/gendo#vaults-from-before-the-apps-update" target="_blank" rel="noopener noreferrer">here is how to move them out</a>.</span>
-          <button type="button" className="btn" onClick={() => { try { localStorage.setItem(RESET_KEY, "1"); } catch { /* shown again next time */ } setResetSeen(true); }}>Got it</button>
         </div>
       )}
       {route.page === "inbox" && <Inbox />}

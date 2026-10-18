@@ -1,6 +1,6 @@
 // The chain, through the server's /chain proxy (the Blockfrost key stays on the server).
 import {
-  Blockfrost, CML, Lucid, SLOT_CONFIG_NETWORK, blockfrostQuery, connect, liveness, makeVault, owner, parseVaultId, txFacts, verifiedOutputs, withProjectIdHeader, withRetries,
+  Blockfrost, CML, Lucid, SLOT_CONFIG_NETWORK, blockfrostQuery, connect, liveness, makeVault, owner, parseVaultId, txFacts, vaultVersionOf, verifiedOutputs, withProjectIdHeader, withRetries,
   type Liveness, type LucidEvolution, type UTxO, type Vault,
 } from "../../../sdk/src/core/index.ts";
 import { readVault, type Get } from "../../../sdk/src/read/index.ts";
@@ -30,9 +30,11 @@ export async function openChain(net: Net): Promise<LucidEvolution> {
 /** After sign-in, read through the session so the proxy serves fresh data. */
 export const readThroughSession = (l: LucidEvolution) => l.switchProvider(withRetries(new Blockfrost(base(), pid())));
 
-export const vaultFromId = (vaultId: string): Vault => {
-  const id = parseVaultId(vaultId);
-  return makeVault(id.network, id.seed);
+/** A saved vault's script, whichever code it runs (vaults.ts has checked its id names its policy). */
+export const vaultOf = (v: { vaultId: string; policy: string }): Vault => {
+  const id = parseVaultId(v.vaultId);
+  const found = vaultVersionOf(id, v.policy);
+  return found ? found.vault : makeVault(id.network, id.seed);
 };
 
 /** Inputs and collateral inputs. On preprod each is rebuilt from the tx that created it and

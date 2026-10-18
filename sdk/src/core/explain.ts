@@ -9,6 +9,7 @@ import { describeTx } from "./cosign.js";
 import { allowanceFromData, configFromData, type AllowanceDatum, type AppConfig, type ConfigDatum } from "./data.js";
 import type { Intent } from "./intent.js";
 import type { Vault } from "./vault.js";
+import { allowanceFromDataV1, configFromDataV1 } from "./legacy.js";
 
 type Qty = Record<string, bigint>;
 
@@ -63,7 +64,9 @@ const ada = (n: bigint) => `${Number(n) / 1e6} ADA`;
  * `verifiedOutputs` so a relay can't forge them. `viewer` is the signing owner's key hash, or
  * every key hash their wallet holds (an HD wallet signs for all of its keys).
  */
-export function explainTx(txCbor: string, vault: Vault, resolvedInputs: UTxO[], opts: { viewer?: string | string[] } = {}): Explanation {
+export function explainTx(txCbor: string, vault: Vault, resolvedInputs: UTxO[], opts: { viewer?: string | string[]; /** The vault's code: 1 is from before apps. */ version?: 1 | 2 } = {}): Explanation {
+  const readConfig = opts.version === 1 ? configFromDataV1 : configFromData;
+  const readAllowance = opts.version === 1 ? allowanceFromDataV1 : allowanceFromData;
   const byRef = new Map(resolvedInputs.map((u) => [`${u.txHash}#${u.outputIndex}`, u]));
   const summary = describeTx(txCbor, {
     vault,
@@ -98,25 +101,25 @@ export function explainTx(txCbor: string, vault: Vault, resolvedInputs: UTxO[], 
   const cfgOut = vaultOuts.find((o) => (o.assets[vault.configUnit] ?? 0n) > 0n);
   if (cfgIn || cfgOut)
     changes.push({
-      kind: "config", before: tryDecode(configFromData, cfgIn?.datum), after: tryDecode(configFromData, cfgOut?.datum),
+      kind: "config", before: tryDecode(readConfig, cfgIn?.datum), after: tryDecode(readConfig, cfgOut?.datum),
       ...(!cfgIn && cfgOut ? { deposit: cfgOut.assets.lovelace ?? 0n } : {}),
     });
   const seen = new Set<string>();
   for (const u of vaultIns)
     for (const unit of allowanceUnits(u.assets as Qty)) {
       seen.add(unit);
-      const before = tryDecode(allowanceFromData, u.datum);
+      const before = tryDecode(readAllowance, u.datum);
       const out = vaultOuts.find((o) => (o.assets[unit] ?? 0n) > 0n);
       const redeemer = summary.vaultSpends[`${u.txHash}#${u.outputIndex}`];
       if (!out) changes.push({ kind: "revoke", unit, before, lovelace: u.assets.lovelace ?? 0n });
       else if (redeemer === "CoSignedSpend" || redeemer === "AgentSpend" || redeemer === "AgentTrade")
-        changes.push({ kind: "spend", unit, redeemer, before, after: tryDecode(allowanceFromData, out.datum) });
+        changes.push({ kind: "spend", unit, redeemer, before, after: tryDecode(readAllowance, out.datum) });
       else
-        changes.push({ kind: "edit", unit, before, after: tryDecode(allowanceFromData, out.datum), lovelaceBefore: u.assets.lovelace ?? 0n, lovelaceAfter: out.assets.lovelace ?? 0n });
+        changes.push({ kind: "edit", unit, before, after: tryDecode(readAllowance, out.datum), lovelaceBefore: u.assets.lovelace ?? 0n, lovelaceAfter: out.assets.lovelace ?? 0n });
     }
   for (const o of vaultOuts)
     for (const unit of allowanceUnits(o.assets))
-      if (!seen.has(unit)) changes.push({ kind: "grant", unit, after: tryDecode(allowanceFromData, o.datum), lovelace: o.assets.lovelace ?? 0n });
+      if (!seen.has(unit)) changes.push({ kind: "grant", unit, after: tryDecode(readAllowance, o.datum), lovelace: o.assets.lovelace ?? 0n });
   for (const c of changes)
     if ("after" in c && c.after === null) warnings.push(`it writes a ${c.kind === "config" ? "config" : "allowance"} the chain will treat as unreadable`);
 
