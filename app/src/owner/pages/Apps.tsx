@@ -54,11 +54,12 @@ function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: Config
     onPropose({ op: "apps", action: enabled ? "update" : "enable", name: "minswap", settings: minswapForm.toSettings(f), signers }, enabled ? "Settings change proposed." : `${app.title} proposed.`);
     setEditing(false);
   };
-  const field = (id: keyof MinswapForm, name: string, unit: string, helpOf: string) => (
+  // Placeholders only: a suggestion shown in grey. Fields stay empty until the owner types a value.
+  const field = (id: keyof MinswapForm, name: string, unit: string, helpOf: string, suggested: string) => (
     <div className="field">
       <label htmlFor={`ms-${id}`}>{name}</label>
       <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input id={`ms-${id}`} inputMode="decimal" value={f[id] as string} onChange={(e) => setF({ ...f, [id]: e.target.value })} style={{ width: 120 }} />
+        <input id={`ms-${id}`} inputMode="decimal" value={f[id] as string} placeholder={suggested} onChange={(e) => setF({ ...f, [id]: e.target.value })} style={{ width: 120 }} />
         <span className="faint">{unit}</span>
       </span>
       <span className="hint">{help(helpOf)}</span>
@@ -115,10 +116,10 @@ function AppCard({ app, cfg, busy, onPropose }: { app: CatalogueApp; cfg: Config
             </span>
             <span className="hint">{help("pools")}</span>
           </div>
-          {field("slippage", "Max slippage", "%", "maxSlippageBps")}
-          {field("fee", "Max batcher fee", "ADA", "maxBatcherFee")}
-          {field("hours", "Order lifetime", "hours", "maxOrderTtlMs")}
-          {field("tip", "Cancel tip", "ADA", "maxCancelTip")}
+          {field("slippage", "Max slippage", "%", "maxSlippageBps", "1")}
+          {field("fee", "Max batcher fee", "ADA", "maxBatcherFee", "2")}
+          {field("hours", "Order lifetime", "hours", "maxOrderTtlMs", "24")}
+          {field("tip", "Cancel tip", "ADA", "maxCancelTip", "0.5")}
           <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             <Signers owners={cfg.owners} threshold={threshold} me={o.me.pkh} value={signers} onChange={setSigners} />
             {tried && problems.map((p) => <ErrorNote key={p} error={p} />)}
