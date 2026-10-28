@@ -38,8 +38,15 @@ This section describes the design. [What exists today](#what-exists-today) says 
 
 ### First use: as fast as a burner
 1. You connect your wallet and click **Create**. That one step makes the wallet, puts your money in, and makes a key for the agent.
-2. You give the key to your agent, the way you would a burner's.
-3. The agent can pay straight away.
+2. **You give the key to your agent by installing Gendo's wallet tool in the app it runs in, with the key already filled in:**
+   - **Claude Code:** one line to paste;
+   - **Cursor and LM Studio:** one link to click;
+   - **Claude Desktop and any other MCP app:** a short block to paste into its settings.
+
+   An agent can't use a bare key on its own, burner or not. It always needs a wallet tool, and this one is Gendo's.
+3. **The agent can pay straight away.** It sees a plain wallet: its balance, a way to pay, and whether a payment went through.
+
+On its first start, the wallet tool swaps the key you copied for a fresh one that only it knows. So if the copy ever leaks from your clipboard or a settings file, it no longer works. You don't do anything for this.
 
 <p align="center"><img src="assets/readme/one-click.gif" alt="The owner clicks Create with 50 ADA, the wallet is ready, the owner copies the agent's key, and the agent's first payment is sent and settles in ten minutes." width="640"></p>
 
