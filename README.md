@@ -48,7 +48,7 @@ This section describes the design. [What exists today](#what-exists-today) says 
 
 On its first start, the wallet tool swaps the key you copied for a fresh one that only it knows. So if the copy ever leaks from your clipboard or a settings file, it no longer works. You don't do anything for this.
 
-<p align="center"><img src="assets/readme/one-click.gif" alt="The owner clicks Create with 50 ADA, the wallet is ready, the owner copies the agent's key, and the agent's first payment is sent and settles in ten minutes." width="640"></p>
+<p align="center"><img src="assets/readme/one-click.gif" alt="The owner clicks Create with 50 ADA and the wallet is ready. They choose Claude Desktop, Claude asks to install the gendo wallet with its key already filled in, and then Claude pays a 4 ADA hosting invoice, which settles in ten minutes." width="640"></p>
 
 There's one owner (you) and one key. You don't pick co-owners, approval counts, budgets, payees or expiry dates. Every payment is held for a few minutes before it goes out, and that's the only rule on day one.
 
