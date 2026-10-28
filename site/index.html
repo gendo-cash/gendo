@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0d0b09">
 <title>gendo</title>
-<meta name="description" content="Give your AI a budget on Cardano. You keep the keys, it pays on its own inside the limits you set, and the chain enforces them.">
+<meta name="description" content="A burner wallet for your AI agent that you can take back. One click to a funded wallet; every payment waits in a short hold you can undo. Enforced by the Cardano chain.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Ccircle cx='13' cy='13' r='12' fill='%230d0b09' stroke='%23efe7d8' stroke-width='2'/%3E%3Cpath d='M13 1a12 12 0 0 1 0 24z' fill='%23e0452b'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -250,6 +250,8 @@
   .start { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
   .need { font-size: 14px; color: var(--mute); max-width: 560px; }
   .need a { color: var(--soft); }
+  .status { font-size: 14px; color: var(--soft); max-width: 560px; border-left: 2px solid var(--red); padding-left: 12px; margin: 0; }
+  .rule-body .soon { align-self: flex-start; margin-bottom: 6px; }
   .dev { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; color: var(--mute); }
   .dev .install { min-height: 40px; padding: 4px 4px 4px 12px; font-size: 13px; }
   .dev .copy { min-height: 32px; padding: 6px 10px; font-size: 12px; }
@@ -331,10 +333,11 @@
   <section class="wrap hero">
     <div class="hero-ghost ghost" aria-hidden="true"><span data-parallax="0.1">限度</span></div>
     <div class="hero-copy">
-      <h1 class="rise">Your agent gets a budget.<br>Never your keys.</h1>
-      <p class="lede rise d2">Set how much your AI can spend, where, and until when. It pays on its own inside those limits; the chain refuses everything else. Works with Claude, Cursor, LM Studio and local models.</p>
+      <h1 class="rise">A burner wallet for your AI.<br>One you can take back.</h1>
+      <p class="lede rise d2">One click and your AI has a funded wallet. Every payment it makes waits in a short hold you can undo. Works with Claude, Cursor, LM Studio and local models.</p>
       <div class="start rise d3">
-        <a class="cta pri" href="https://app.gendo.cash">Try it free on preprod <span aria-hidden="true">↗</span></a>
+        <p class="status"><b>Being built:</b> the one-click wallet and Undo. Today's app is the vault underneath, where you set budgets and payees yourself.</p>
+        <a class="cta pri" href="https://app.gendo.cash">Try today's build on preprod <span aria-hidden="true">↗</span></a>
         <p class="need">You'll need a Cardano wallet (<a href="https://www.lace.io">Lace</a> or <a href="https://eternl.io">Eternl</a>) set to the preprod test network, and free test ADA from the <a href="https://docs.cardano.org/cardano-testnets/tools/faucet">faucet</a>. Nothing here uses real money.</p>
         <div class="dev"><span>Developers:</span><div class="install"><span class="dollar" aria-hidden="true">$</span><code>npx skills add gendo-cash/gendo</code><button class="copy" type="button">Copy</button></div></div>
       </div>
@@ -344,27 +347,25 @@
 
   <section class="band" aria-labelledby="flow-h">
     <div class="wrap flow">
-      <h2 id="flow-h">One shared vault. One budget. One AI.</h2>
+      <h2 id="flow-h">One pool. Many agents. A key each.</h2>
       <div class="flow-grid">
         <div class="card flow-card">
-          <div class="top"><span class="kanji" style="color:var(--red)" aria-hidden="true">所有者</span><span class="mono">2 / 3 signed</span></div>
+          <div class="top"><span class="kanji" style="color:var(--red)" aria-hidden="true">所有者</span><span class="mono">you</span></div>
           <div class="seals" aria-hidden="true">
             <div class="seal" style="transform:rotate(-6deg)"><span>印</span></div>
-            <div class="seal" style="transform:rotate(4deg)"><span>印</span></div>
-            <div class="seal empty"></div>
           </div>
-          <p>You and your co-owners hold the money. Any 2 of 3 of you approve the AI's budget, each from your own wallet.</p>
+          <p>You hold the pool. Nothing to set up first: no co-owners, no limits, no forms.</p>
         </div>
 
         <div class="card flow-card allowance">
           <span class="kanji bg-kanji" aria-hidden="true" data-parallax="0.08">枠</span>
-          <div class="top"><span class="name">billing-agent</span><span class="mono tag">BUDGET</span></div>
-          <div class="amount"><b>7</b><span>/ 25 ADA today</span></div>
+          <div class="top"><span class="name">research-bot</span><span class="mono tag">DRIP</span></div>
+          <div class="amount"><b>7</b><span>/ 25 ADA, refills from the pool</span></div>
           <div class="meter" aria-hidden="true"><i class="grow"></i></div>
           <dl class="facts" style="margin:0">
-            <div><dt>per payment</dt><dd>5 ADA</dd></div>
-            <div><dt>can pay</dt><dd>3 addresses</dd></div>
-            <div><dt>ends in</dt><dd>30 days</dd></div>
+            <div><dt>hold</dt><dd>10 min</dd></div>
+            <div><dt>the pool</dt><dd>out of reach</dd></div>
+            <div><dt>revoke</dt><dd>one tap</dd></div>
           </dl>
         </div>
 
@@ -373,9 +374,9 @@
           <div class="pays">
             <div><span>→ hosting</span><span>−4 ADA</span></div>
             <div><span>→ api</span><span>−3 ADA</span></div>
-            <div class="no"><span>→ unknown address</span><span>refused</span></div>
+            <div class="no"><span>→ unknown address</span><span>undone</span></div>
           </div>
-          <p>Your AI pays on its own. The chain checks every payment against its budget.</p>
+          <p>Your AI sees a plain wallet. Every payment waits in a hold you can cancel.</p>
         </div>
       </div>
     </div>
@@ -383,8 +384,8 @@
 
   <section id="how" class="wrap section how" aria-labelledby="how-h">
     <div class="how-head">
-      <h2 id="how-h">Four stamps.<br>Then it runs.</h2>
-      <p class="sub">Set once. Checked on every payment.</p>
+      <h2 id="how-h">As fast as a burner.<br>Except you can undo.</h2>
+      <p class="sub">How the redesign works. It's being built now.</p>
     </div>
     <ol class="steps">
       <li class="card step">
@@ -392,51 +393,48 @@
           <span class="kanji step-k">設立</span><span class="mono step-n">一</span>
           <div class="s1">
             <div class="seal" style="transform:rotate(-6deg)"><span>印</span></div>
-            <div class="seal" style="transform:rotate(5deg)"><span>印</span></div>
-            <div class="seal empty"></div>
           </div>
-          <div class="step-cap">2 of 3 approved</div>
+          <div class="step-cap">one click</div>
         </div>
-        <div class="step-body"><h3>Create a vault</h3><p>Connect your Cardano wallet in the app. Add co-owners if you like; each approves from their own wallet.</p></div>
+        <div class="step-body"><h3>Create</h3><p>Connect your Cardano wallet and click once: the wallet, the money and your AI's key, all in one step.</p></div>
       </li>
       <li class="card step">
         <div class="step-pic" aria-hidden="true">
           <span class="kanji step-k">付与</span><span class="mono step-n">二</span>
           <div class="mini">
-            <div class="row"><span>BUDGET</span><span style="color:var(--red)">30d</span></div>
-            <div class="bar"><i style="width:20%"></i><span class="tick" style="left:20%;top:-5px;height:16px"></span></div>
-            <div class="row"><span>5 a payment</span><span>25 a day</span></div>
-            <div class="chips"><span>hosting</span><span>api</span><span>payroll</span></div>
+            <div class="row"><span>WALLET</span><span style="color:var(--red)">50 ADA</span></div>
+            <div class="bar"><i style="width:100%"></i></div>
+            <div class="row"><span>key filled in</span><span>ready</span></div>
+            <div class="chips"><span>Claude</span><span>Cursor</span><span>LM Studio</span></div>
           </div>
           <div class="seal s2-seal"><span>承認</span></div>
         </div>
-        <div class="step-body"><h3>Connect your AI, give it a budget</h3><p>Paste a pairing code into Claude, Cursor or LM Studio. Then set how much per payment, per day, to whom, and until when.</p></div>
+        <div class="step-body"><h3>Hand it to your AI</h3><p>One line for Claude Code, one link for Cursor or LM Studio, with the key already in it. On first start it swaps that key for one only it knows.</p></div>
       </li>
       <li class="card step">
         <div class="step-pic" aria-hidden="true">
           <span class="kanji step-k">支払</span><span class="mono step-n">三</span>
           <div class="s3">
             <div class="box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="4"/><path d="M12 12h9m-3 0v3m-3-3v2"/></svg></div>
-            <div class="arrow"><span class="amt">−4 ADA</span><div class="line"></div><span class="note">no owner online</span></div>
+            <div class="arrow"><span class="amt">−4 ADA</span><div class="line"></div><span class="note">held 10 min</span></div>
             <div class="box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v12H3zM3 11h18M16 15h2"/></svg></div>
           </div>
-          <div class="step-cap">the chain checks every payment</div>
+          <div class="step-cap">then it goes out</div>
         </div>
-        <div class="step-body"><h3>It pays on its own</h3><p>Inside the budget, nobody needs to be online.</p></div>
+        <div class="step-body"><h3>It pays on its own</h3><p>Your AI sees its balance and a way to pay. Each payment waits a few minutes, then goes out.</p></div>
       </li>
       <li class="card step">
         <div class="step-pic" aria-hidden="true">
-          <span class="kanji step-k">承認</span><span class="mono step-n">四</span>
+          <span class="kanji step-k">取消</span><span class="mono step-n">四</span>
           <div class="s4">
-            <div class="row"><span>12 ADA</span><span style="color:var(--red)">limit 5</span></div>
+            <div class="row"><span>40 ADA</span><span style="color:var(--red)">8:12 left</span></div>
             <div class="over"><span class="in"></span><span class="out"></span><span class="tick"></span></div>
             <div class="pair">
-              <div class="seal" style="transform:rotate(-8deg)"><span>印</span></div>
-              <div class="seal" style="transform:rotate(6deg)"><span>印</span></div>
+              <div class="seal" style="transform:rotate(-8deg)"><span>取消</span></div>
             </div>
           </div>
         </div>
-        <div class="step-body"><h3>Over budget? You approve</h3><p>Your AI asks first. You and your co-owners approve it in the app.</p></div>
+        <div class="step-body"><h3>Wrong payment? Undo</h3><p>Every payment shows in your feed with a countdown. One tap and the money goes back to the pool.</p></div>
       </li>
     </ol>
   </section>
@@ -444,57 +442,57 @@
   <section id="rules" class="rules" aria-labelledby="rules-h">
     <div class="wrap section rules-in">
       <div class="rules-head">
-        <h2 id="rules-h">Enforced by the chain. Not by a prompt.</h2>
-        <p>Even a tricked or misbehaving AI can't talk its way around them: the chain rejects any payment that breaks a rule.</p>
+        <h2 id="rules-h">What a burner can't do.</h2>
+        <p>The contract enforces each of these, not Gendo's server. Even a tricked AI or a stolen key can't get around them.</p>
       </div>
       <div class="rule-grid">
         <div class="rule">
           <div class="rule-pic" aria-hidden="true">
-            <span class="kanji">上限</span>
+            <span class="kanji">取消</span>
             <div class="r-col">
-              <div class="row"><span>4 ADA</span><span>limit 5</span></div>
+              <div class="row"><span>4 ADA</span><span>sent</span></div>
               <div class="track"><i style="width:80%"></i><span class="limit"></span></div>
-              <div class="row"><span>12 ADA</span><span class="refused">refused</span></div>
+              <div class="row"><span>40 ADA</span><span class="refused">undone</span></div>
               <div class="track"><i class="full" style="width:100%"></i><span class="spill"></span><span class="limit"></span></div>
             </div>
           </div>
-          <div class="rule-body"><h3>Limit per payment</h3><p>No single payment can go over it, fees included.</p></div>
+          <div class="rule-body"><span class="soon">Being built</span><h3>Undo</h3><p>Every payment waits in a short hold. One tap cancels it before it goes out.</p></div>
         </div>
 
         <div class="rule">
           <div class="rule-pic" aria-hidden="true" style="align-items:flex-end">
-            <span class="kanji">予算</span><span class="corner">25 / day</span>
+            <span class="kanji">補充</span><span class="corner">25 / day</span>
             <div class="r-bars"><i style="height:40%"></i><i style="height:72%"></i><i style="height:55%"></i><i style="height:100%"></i><i style="height:20%"></i><i style="height:88%"></i><i style="height:48%"></i></div>
             <div class="r-days">MON – SUN</div>
           </div>
-          <div class="rule-body"><h3>Budget per day, or any period</h3><p>It resets on schedule. Retrying doesn't get more.</p></div>
+          <div class="rule-body"><span class="soon">Being built</span><h3>Refill</h3><p>Your AI spends from a drip that tops itself up from the pool. The chain caps the drip; your AI can't touch the pool.</p></div>
         </div>
 
         <div class="rule">
           <div class="rule-pic" aria-hidden="true">
-            <span class="kanji">宛先</span>
+            <span class="kanji">失効</span>
             <div class="r-col mono">
-              <div class="addr"><span>hosting</span><span class="kanji" style="transform:rotate(-8deg)">済</span></div>
-              <div class="addr"><span>api</span><span class="kanji" style="transform:rotate(6deg)">済</span></div>
-              <div class="addr no"><span>unknown</span><span class="refused">×</span></div>
+              <div class="addr"><span>research-bot</span><span class="kanji" style="transform:rotate(-8deg)">済</span></div>
+              <div class="addr"><span>shopper-bot</span><span class="kanji" style="transform:rotate(6deg)">済</span></div>
+              <div class="addr no"><span>old-bot</span><span class="refused">×</span></div>
             </div>
           </div>
-          <div class="rule-body"><h3>Only approved addresses</h3><p>Anywhere else, the payment is refused.</p></div>
+          <div class="rule-body"><h3>Revoke</h3><p>One tap stops an agent's key for good. Today the money goes back to the pool; leaving it in place is being built.</p></div>
         </div>
 
         <div class="rule">
           <div class="rule-pic" aria-hidden="true">
-            <span class="kanji">期限</span>
+            <span class="kanji">共有</span>
             <div class="r-exp">
-              <div class="ring"><div><b>7</b><span>DAYS</span></div></div>
+              <div class="ring"><div><b>3</b><span>AGENTS</span></div></div>
               <div class="r-col">
-                <span>day 30</span>
-                <span class="refused">budget ends</span>
-                <span>nothing to sign</span>
+                <span>one pool</span>
+                <span class="refused">a key each</span>
+                <span>no extra burners</span>
               </div>
             </div>
           </div>
-          <div class="rule-body"><h3>An end date</h3><p>The budget stops on its date. Nobody has to do anything.</p></div>
+          <div class="rule-body"><h3>Many agents, one pool</h3><p>Each agent gets its own key over the same money, instead of one funded burner per agent.</p></div>
         </div>
 
         <div class="rule">
@@ -510,7 +508,7 @@
             </div>
             <div class="seal on-paper pause-seal"><span>停止</span></div>
           </div>
-          <div class="rule-body"><h3>Pause everything</h3><p>One approval from the owners stops every AI at once.</p></div>
+          <div class="rule-body"><h3>Pause everything</h3><p>One tap stops every agent at once.</p></div>
         </div>
 
         <div class="ink-block" aria-hidden="true">
@@ -523,15 +521,15 @@
 
   <section class="wrap section log" aria-labelledby="log-h">
     <div class="log-head">
-      <h2 id="log-h">Your agent knows the rules before it asks.</h2>
-      <p class="sub">Ask it to pay the same invoice twice and it won't. Over its budget, it asks you instead of trying.</p>
+      <h2 id="log-h">Your AI sees a wallet. You see a feed.</h2>
+      <p class="sub">It doesn't learn any rules. You watch what it pays and undo anything still in the hold. A preview of the redesign.</p>
     </div>
     <div class="receipt">
-      <div class="head"><span class="kanji" aria-hidden="true">領収書</span><small>billing-agent, today</small></div>
-      <div class="line"><span>Pay 4 ADA for INV-1001</span><span class="st paid"><span class="kanji" aria-hidden="true">済</span>paid</span></div>
-      <div class="line"><span>Pay 12 ADA for INV-1004</span><span class="st"><span class="kanji" aria-hidden="true">上限超</span>over budget, sent to you</span></div>
-      <div class="line"><span>Pay 4 ADA for INV-1001</span><span class="st"><span class="kanji" aria-hidden="true">既払</span>already paid</span></div>
-      <div class="foot"><span>spent 4 / 25 ADA</span><span>no approvals needed</span></div>
+      <div class="head"><span class="kanji" aria-hidden="true">領収書</span><small>research-bot, today</small></div>
+      <div class="line"><span>Pay 4 ADA to hosting</span><span class="st paid"><span class="kanji" aria-hidden="true">済</span>sent</span></div>
+      <div class="line"><span>Pay 40 ADA to llm-api.example</span><span class="st"><span class="kanji" aria-hidden="true">取消</span>undone by you</span></div>
+      <div class="line"><span>Pay 3 ADA to api</span><span class="st"><span class="kanji" aria-hidden="true">保留</span>in the hold, 6 min left</span></div>
+      <div class="foot"><span>drip 7 / 25 ADA</span><span>1 undone</span></div>
       <div class="seal" aria-hidden="true"><span>限度</span></div>
     </div>
   </section>
@@ -624,7 +622,7 @@
               <g transform="rotate(-8 44 134)"><rect x="30" y="120" width="28" height="28" rx="4" fill="#e0452b" stroke="none"/><rect x="34" y="124" width="20" height="20" rx="2" stroke="#0d0b09" stroke-width="1.5"/></g>
             </svg>
           </div>
-          <div class="use-body"><h3>Swaps on a leash</h3><span class="soon">Roadmap</span></div>
+          <div class="use-body"><h3>Swaps on a leash</h3><span class="soon">Milestone 2</span></div>
         </div>
       </div>
     </div>
@@ -632,9 +630,9 @@
 
   <section class="wrap closing" aria-labelledby="end-h">
     <div class="seal" aria-hidden="true"><span>限度</span></div>
-    <h2 id="end-h">Stamp the rules.<br>Let it run.</h2>
+    <h2 id="end-h">Give it a wallet.<br>Keep the undo.</h2>
     <div class="ctas">
-      <a class="cta pri" href="https://app.gendo.cash">Try it free on preprod <span aria-hidden="true">↗</span></a>
+      <a class="cta pri" href="https://app.gendo.cash">Try today's build on preprod <span aria-hidden="true">↗</span></a>
       <a class="cta" href="https://github.com/gendo-cash/gendo">GitHub <span aria-hidden="true">↗</span></a>
     </div>
   </section>
@@ -643,7 +641,7 @@
 <footer>
   <div class="wrap foot">
     <a href="https://github.com/gendo-cash/gendo">github.com/gendo-cash/gendo</a>
-    <span><span class="kanji" aria-hidden="true">限度</span>Built on Cardano. The limits are enforced by the chain, not by trust.</span>
+    <span><span class="kanji" aria-hidden="true">限度</span>Built on Cardano. The rules are enforced by the chain, not by trust.</span>
   </div>
 </footer>
 
