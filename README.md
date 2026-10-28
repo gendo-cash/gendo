@@ -17,6 +17,8 @@ The difference shows up after that, in four things a plain burner can't do:
 - **Revoke.** One tap kills an agent's key. The money stays where it is.
 - **Many agents, one pool.** Each agent gets its own key over the same money, instead of one funded burner per agent.
 
+The same layer is what makes it safe to let an agent trade. On a supported DEX (Minswap first), an agent trades from the pool without being able to walk off with it: the chain checks every order, and what comes back always returns to the pool.
+
 <p align="center"><img src="assets/readme/burner-vs-gendo.png" alt="Burner vs Gendo. One click to a funded wallet: both. Undo a payment: a burner can't; Gendo holds every payment. Refill without handing over more: a burner can't; Gendo's cap is enforced by the chain. Revoke the agent's key: a burner can't; Gendo does it in one tap. Many agents, one pool: a burner needs one each; Gendo gives each a key over shared money." width="100%"></p>
 
 > **Status: redesign in progress. Unaudited, Cardano preprod only.**
@@ -90,7 +92,7 @@ flowchart LR
 The older vault features stay, but only as an advanced layer. Their one job now is to shorten or skip the hold for things you already trust:
 - **Trusted payees, per-payment caps and expiry dates:** payments that fit a rule you set can skip the hold or have a shorter one.
 - **Several owners (m of n), for teams:** the contract supports it, but it's never part of the first-use flow.
-- **DeFi apps:** an agent can trade on a supported protocol from the shared pool, and what comes back always returns to the pool. This is milestone 2, not the product. See [Milestone 2: DeFi from the pool](#milestone-2-defi-from-the-pool).
+- **DeFi apps:** an agent can trade on a supported protocol from the shared pool, and what comes back always returns to the pool. Trading is the riskiest thing an agent can do with money, which is why it comes second, on top of the hold. See [DeFi from the pool (milestone 2)](#defi-from-the-pool-milestone-2).
 
 ## Why the chain enforces it
 Undo, the drip and revoke are only worth trusting if no server can get around them. So the contract enforces them:
@@ -268,8 +270,8 @@ flowchart LR
 
 Ported code is **not** audited code. The audit covers Sundae's composition at commit 504e104 on stdlib v2, not this one. `aiken-design-patterns` has no published audit.
 
-### Milestone 2: DeFi from the pool
-DeFi is the second milestone, not the product. It exists so an agent can use the shared pool on a protocol without being able to walk off with it: an adapter checks every order, what comes back always returns to the vault, and the owner can sweep it. In the redesign, a trade waits in a hold before it goes out like any payment; a filled trade can't be undone.
+### DeFi from the pool (milestone 2)
+DeFi is where the safety layer pays off. One bad trade, a hijacked prompt or a stolen key can empty an agent's wallet in a single transaction, so trading is the last thing you'd hand a plain burner. Gendo lets an agent use the shared pool on a protocol without being able to walk off with it: an adapter checks every order, what comes back always returns to the vault, and the owner can sweep it. In the redesign, a trade waits in a hold before it goes out like any payment; a filled trade can't be undone.
 
 
 An **app** is a DeFi protocol gendo supports through one small on-chain **adapter**. Minswap V2 swaps are the first; it is the only DEX on preprod whose orders a script can own and refund.
@@ -329,7 +331,7 @@ The input datum is **fully validated on every agent-signed spend**, and every fi
 **`AgentTrade { intent_hash }`** is the trade path. It shares every rule above except withdrawals and the destination rule:
 - the tx has **exactly one withdrawal: zero, from the adapter** of an app that is in the config **and** in the allowance's `apps`;
 - every other output is an approved destination or an order at that app's order script (its enterprise address, exactly), and there is at least one order;
-- the adapter, running as that withdraw-zero, checks what each order says (see [Apps](#milestone-2-defi-from-the-pool)).
+- the adapter, running as that withdraw-zero, checks what each order says (see [Apps](#defi-from-the-pool-milestone-2)).
 The datum's `apps` list (at most 4 names, no duplicates) is checked with the rest of the datum.
 
 **`CoSignedSpend { intent_hash }`** is the over-limit path. It needs the same datum validation, intent check, pause check and role-disjointness check, and **the agent's signature plus the owner threshold** in one tx. Its outputs can't pay a script other than the vault. There is no on-chain proposal object.

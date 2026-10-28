@@ -32,9 +32,10 @@ export function Notice() {
       <section className="panel" style={{ width: "100%", maxWidth: 520 }}>
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
           <span className="cap">Early preview</span>
-          <h2 id="notice-h" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>This is gendo's first version</h2>
-          <p style={{ margin: 0 }}>Everything here works, but it's the early state of each feature: expect rough edges and changes. More is on the way, including invite links for co-owners, notifications, a fuller activity feed, and agents trading inside their limits through audited DeFi adapters.</p>
-          <p className="muted" style={{ margin: 0 }}>It runs on Cardano's preprod test network only, with test ADA that has no real value. The vault's code hasn't been audited yet.</p>
+          <h2 id="notice-h" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>You're using the current build</h2>
+          <p style={{ margin: 0 }}>Gendo is becoming a burner wallet for your AI agent that you can take back: one click to start, and every payment waits in a short hold you can undo. That flow isn't built yet.</p>
+          <p style={{ margin: 0 }}>What's here is the vault it's built on: owners, budgets and payees, enforced by the chain. It works, and it will change.</p>
+          <p className="muted" style={{ margin: 0 }}>It runs on Cardano's preprod test network only, with test ADA that has no real value. The code hasn't been audited yet.</p>
           <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>
             <button type="button" className="btn pri" autoFocus onClick={close}>Got it</button>
           </div>
