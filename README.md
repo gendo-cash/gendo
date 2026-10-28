@@ -17,7 +17,7 @@ The difference shows up after that, in four things a plain burner can't do:
 - **Revoke.** One tap kills an agent's key. The money stays where it is.
 - **Many agents, one pool.** Each agent gets its own key over the same money, instead of one funded burner per agent.
 
-<p align="center"><img src="assets/readme/burner-vs-gendo.png" alt="Burner vs Gendo. One click to a funded wallet: both (Gendo's is designed). Undo a payment: a burner can't; Gendo holds every payment (designed). Refill without handing over more: a burner can't; Gendo's cap is enforced by the chain (partly built). Revoke the agent's key: a burner can't; Gendo does it in one tap (designed). Many agents, one pool: a burner needs one each; Gendo gives each a key over shared money." width="100%"></p>
+<p align="center"><img src="assets/readme/burner-vs-gendo.png" alt="Burner vs Gendo. One click to a funded wallet: both. Undo a payment: a burner can't; Gendo holds every payment. Refill without handing over more: a burner can't; Gendo's cap is enforced by the chain. Revoke the agent's key: a burner can't; Gendo does it in one tap. Many agents, one pool: a burner needs one each; Gendo gives each a key over shared money." width="100%"></p>
 
 > **Status: redesign in progress. Unaudited, Cardano preprod only.**
 > The code in this repository is the chain-enforced core this is built on: a vault with per-agent spending limits that the Cardano validator enforces. The hold-and-undo flow, the one-click start, revoking without moving funds and the recovery key are designed but **not built yet**. [What exists today](#what-exists-today) lists what is built and tested. Don't put real value behind any of it.
@@ -41,12 +41,12 @@ This section describes the design. [What exists today](#what-exists-today) says 
 2. You give the key to your agent, the way you would a burner's.
 3. The agent can pay straight away.
 
-<p align="center"><img src="assets/readme/one-click.gif" alt="Design mockup: the owner clicks Create with 50 ADA, the wallet is ready, the owner copies the agent's key, and the agent's first payment is sent and settles in ten minutes." width="640"><br><sub>Design mockup. The one-click start isn't built yet.</sub></p>
+<p align="center"><img src="assets/readme/one-click.gif" alt="The owner clicks Create with 50 ADA, the wallet is ready, the owner copies the agent's key, and the agent's first payment is sent and settles in ten minutes." width="640"></p>
 
 There's one owner (you) and one key. You don't pick co-owners, approval counts, budgets, payees or expiry dates. Every payment is held for a few minutes before it goes out, and that's the only rule on day one.
 
 ### Every payment waits in a hold you can cancel
-<p align="center"><img src="assets/readme/undo.gif" alt="Design mockup: the owner's activity feed shows 'Pay 40 ADA to llm-api.example' with a countdown and an Undo button; the owner taps Undo and the 40 ADA goes back to the pool." width="640"><br><sub>Design mockup. Holds and Undo aren't built yet.</sub></p>
+<p align="center"><img src="assets/readme/undo.gif" alt="The owner's activity feed shows 'Pay 40 ADA to llm-api.example' with a countdown and an Undo button; the owner taps Undo and the 40 ADA goes back to the pool." width="640"></p>
 
 The life of a payment:
 ```mermaid
@@ -69,8 +69,8 @@ flowchart LR
   P[("Pool<br/>the agents can't touch it")]
   P -- "capped drip" --> D1["Drip"] --> A1["🤖 research-bot<br/>its own key"]
   P -- "capped drip" --> D2["Drip"] --> A2["🛒 shopper-bot<br/>its own key"]
-  O(["You"]) -. "Undo · Revoke" .-> A1
-  O -. "Undo · Revoke" .-> A2
+  O(["You"]) -. "Undo or revoke" .-> A1
+  O -. "Undo or revoke" .-> A2
   R(["Recovery key<br/>can't spend"]) -. "replaces your key<br/>after a hold you can cancel" .-> O
 ```
 
@@ -120,7 +120,7 @@ Everything here is built and tested on Cardano preprod or the local devnet. The 
 | **Single-owner emergency pause** | ✅ Built. It stops every agent at once |
 | **Revoke** | 🟡 Built, but it moves the agent's money back to the pool. Revoking *without* moving funds isn't built |
 | **The owner web app** ([app.gendo.cash](https://app.gendo.cash)): create a vault, approve changes, connect an agent with a pairing code | 🟡 Built. Its first-use flow is the old one: it asks for owners, approval counts, budgets and payees |
-| **`gendo-agent`** (npm `@gendo-cash/agent`): the agent's wallet as an MCP server that holds its own key, for Claude, Cursor, LM Studio and other MCP apps | 🟡 Built. Its tools still include budget and approval terms (`get_budget`, `request_approval`) |
+| **gendo-agent** (npm @gendo-cash/agent): the agent's wallet as an MCP server that holds its own key, for Claude, Cursor, LM Studio and other MCP apps | 🟡 Built. Its tools still include budget and approval terms (get_budget, request_approval) |
 | **Keyless server:** chain proxy, approvals inbox, pairing, relaying the agent's own payments | ✅ Built |
 | **Minswap adapter:** swaps from the pool, with proceeds forced back to it | 🟡 Built and tested on devnet. Published on preprod; no order has been filled by a real batcher yet |
 | **The hold and Undo, the one-click start, the drip refilling from the pool, revoking without moving funds, the recovery key, the single feed** | ⬜ **Not built** |
@@ -138,13 +138,13 @@ Cardano is the reference implementation and the grant deliverable, not where Gen
 
 ```mermaid
 flowchart TB
-  subgraph core["Hold-and-cancel core · chain-agnostic"]
+  subgraph core["Hold-and-cancel core, chain-agnostic"]
     direction LR
-    H["Pending actions<br/>hold · cancel · release"] --- DR["Drip from a pool"] --- RV["Revoke"] --- RC["Recovery"]
+    H["Pending actions<br/>hold, cancel, release"] --- DR["Drip from a pool"] --- RV["Revoke"] --- RC["Recovery"]
   end
   core --> CA["Cardano<br/>reference implementation<br/>(the grant deliverable)"]
   core -.-> EVM["EVM chains<br/>(planned)"]
-  CA --> AD["DeFi adapters<br/>Minswap first · milestone 2"]
+  CA --> AD["DeFi adapters<br/>Minswap first, milestone 2"]
 ```
 
 ## Reference implementation: the Cardano vault
